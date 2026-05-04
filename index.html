@@ -6,11 +6,12 @@
   <meta name="theme-color" content="#1976d2">
   <meta name="description" content="Aplicacion para diagnostico social comunitario - 100% offline">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Diagnostico Social Comunitario</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
   <link rel="stylesheet" href="styles.css">
+<base target="_blank">
 </head>
 <body>
   <div class="app-container">
@@ -440,3 +441,263 @@
         </div>
       </div>
     </div>
+
+    <!-- PANTALLA NNA -->
+    <div class="screen hidden" id="screenNNA">
+      <div class="app-header">
+        <h1>👦 NNA No Escolarizados</h1>
+        <p class="subtitle" id="nnaSubtitle">Datos personales</p>
+      </div>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="gps-indicator obtaining" id="gpsNNA">
+            <span class="status-indicator syncing"></span> Obteniendo GPS...
+          </span>
+        </div>
+        <div class="status-item" id="nnaPaso">Paso 1 de 2</div>
+      </div>
+      <div class="screen active">
+        <div class="progress-bar"><div class="progress-fill" id="progressNNA" style="width:50%"></div></div>
+        <p class="progress-text" id="progressTextNNA">Paso 1 de 2: Datos personales</p>
+
+        <!-- PASO 1 -->
+        <div id="pasoNNA1">
+          <div class="card">
+            <div class="card-title">🔍 Busqueda por Cedula (Representante)</div>
+            <div class="form-group">
+              <label class="form-label">Cedula del representante <span class="required">*</span></label>
+              <input type="number" class="form-input" id="nnaCedulaRep" placeholder="Ingrese cedula del representante" inputmode="numeric" oninput="app.buscarVecino('nna')">
+              <p class="form-hint">Escriba al menos 6 digitos para buscar</p>
+            </div>
+            <div id="nnaBusquedaResultado"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">👤 Datos del Representante</div>
+            <div class="form-group">
+              <label class="form-label">Nombre y Apellido <span class="required">*</span></label>
+              <input type="text" class="form-input" id="nnaNombreRep" placeholder="Nombre completo del representante">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telefono</label>
+              <input type="tel" class="form-input" id="nnaTelefonoRep" placeholder="Ej: 0412-1234567">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Direccion</label>
+              <input type="text" class="form-input" id="nnaDireccionRep" placeholder="Direccion completa">
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">👶 Datos del NNA</div>
+            <div class="form-group">
+              <label class="form-label">Nombre y Apellido del NNA <span class="required">*</span></label>
+              <input type="text" class="form-input" id="nnaNombre" placeholder="Nombre completo del nino/a">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Edad <span class="required">*</span></label>
+              <input type="number" class="form-input" id="nnaEdad" placeholder="Edad en anos" inputmode="numeric" min="0" max="18">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sexo <span class="required">*</span></label>
+              <div class="option-group">
+                <button type="button" class="option-btn" data-name="nnaSexo" data-value="M" onclick="app.selectOption(this)">Masculino</button>
+                <button type="button" class="option-btn" data-name="nnaSexo" data-value="F" onclick="app.selectOption(this)">Femenino</button>
+              </div>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
+            <button class="btn btn-primary" onclick="app.nnaSiguiente(2)">Siguiente →</button>
+          </div>
+        </div>
+
+        <!-- PASO 2 -->
+        <div id="pasoNNA2" class="hidden">
+          <div class="card">
+            <div class="card-title">📋 Situacion de Escolarizacion</div>
+            <div class="form-section">
+              <div class="form-group">
+                <label class="form-label">1. El NNA actualmente esta escolarizado?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="nnaEscolarizado" data-value="SI" onclick="app.selectOption(this); app.toggleEscolarizacion(true)">SI</button>
+                  <button type="button" class="option-btn" data-name="nnaEscolarizado" data-value="NO" onclick="app.selectOption(this); app.toggleEscolarizacion(false)">NO</button>
+                </div>
+              </div>
+              <div id="nnaEscolarizacionDetalle" class="hidden">
+                <div class="form-group">
+                  <label class="form-label">Nombre de la institucion</label>
+                  <input type="text" class="form-input" id="nnaInstitucion" placeholder="Nombre de la escuela/institucion">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Grado o ano que cursa</label>
+                  <input type="text" class="form-input" id="nnaGrado" placeholder="Ej: 3er grado, 1er ano">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">2. Motivo de no escolarizacion (si aplica)</label>
+                <div class="checkbox-group">
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo1" value="economico"><label for="nnaMotivo1">Razones economicas</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo2" value="discapacidad"><label for="nnaMotivo2">Discapacidad o condicion de salud</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo3" value="trabajo"><label for="nnaMotivo3">Trabajo infantil</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo4" value="embarazo"><label for="nnaMotivo4">Embarazo adolescente</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo5" value="violencia"><label for="nnaMotivo5">Violencia o inseguridad</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo6" value="desplazamiento"><label for="nnaMotivo6">Desplazamiento o migracion</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivo7" value="falta_documentos"><label for="nnaMotivo7">Falta de documentos</label>
+                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                    <input type="checkbox" id="nnaMotivoOtroCheck" value="otro" onchange="app.toggleOtro('nnaMotivoOtro')"><label for="nnaMotivoOtroCheck">Otro</label>
+                  </div>
+                  <div class="form-group hidden" id="nnaMotivoOtro">
+                    <input type="text" class="form-input" placeholder="Especifique otro motivo">
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">3. El NNA recibe algun tipo de proteccion o beneficio social?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="nnaBeneficio" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="nnaBeneficio" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">4. Tipo de vivienda</label>
+                <div class="radio-group">
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
+                    <input type="radio" name="nnaVivienda" value="propia"><label>Propia</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
+                    <input type="radio" name="nnaVivienda" value="alquilada"><label>Alquilada</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
+                    <input type="radio" name="nnaVivienda" value="prestada"><label>Prestada/Invadida</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
+                    <input type="radio" name="nnaVivienda" value="otra"><label>Otra</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">📋 Seguimiento del caso</div>
+            <div class="form-group">
+              <label class="form-label">Necesidad detectada</label>
+              <textarea class="form-textarea" id="nnaNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado del caso</label>
+              <select class="form-select" id="nnaEstadoCaso">
+                <option value="pendiente">🔴 Pendiente</option>
+                <option value="proceso">🟡 En proceso</option>
+                <option value="resuelto">🟢 Resuelto</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.nnaAnterior(1)">← Anterior</button>
+            <button class="btn btn-secondary" onclick="app.guardarBorrador('nna')">💾 Borrador</button>
+            <button class="btn btn-success" onclick="app.guardarEncuesta('nna')">✅ Guardar y finalizar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANTALLA SEGUIMIENTO -->
+    <div class="screen hidden" id="screenSeguimiento">
+      <div class="app-header">
+        <h1>📋 Mis Casos</h1>
+        <p class="subtitle">Seguimiento de encuestas</p>
+      </div>
+      <div class="screen active" style="padding:var(--spacing-md);">
+        <div class="card">
+          <div class="card-title">Filtros</div>
+          <div class="form-group">
+            <label class="form-label">Tipo de encuesta</label>
+            <select class="form-select" id="filtroTipo" onchange="app.filtrarCasos()">
+              <option value="">Todas</option>
+              <option value="adultos">Adultos Mayores</option>
+              <option value="nna">NNA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select class="form-select" id="filtroEstado" onchange="app.filtrarCasos()">
+              <option value="">Todos</option>
+              <option value="pendiente">🔴 Pendiente</option>
+              <option value="proceso">🟡 En proceso</option>
+              <option value="resuelto">🟢 Resuelto</option>
+            </select>
+          </div>
+        </div>
+        <div id="listaCasos" style="margin-top:var(--spacing-md);">
+          <div class="alert alert-info"><span>📋</span><span>No hay casos registrados</span></div>
+        </div>
+      </div>
+      <div class="btn-group" style="padding:var(--spacing-md);">
+        <button class="btn btn-secondary" onclick="app.volverMenu()">← Volver al menu</button>
+      </div>
+    </div>
+
+    <!-- PANTALLA EDITAR CASO -->
+    <div class="screen hidden" id="screenEditarCaso">
+      <div class="app-header">
+        <h1>✏️ Editar Caso</h1>
+        <p class="subtitle" id="editarCasoSubtitle">Actualizar seguimiento</p>
+      </div>
+      <div class="screen active">
+        <div class="card">
+          <div class="card-title">Informacion del caso</div>
+          <div id="editarCasoInfo"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Actualizar seguimiento</div>
+          <div class="form-group">
+            <label class="form-label">Necesidad detectada</label>
+            <textarea class="form-textarea" id="editarNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado del caso</label>
+            <select class="form-select" id="editarEstadoCaso">
+              <option value="pendiente">🔴 Pendiente</option>
+              <option value="proceso">🟡 En proceso</option>
+              <option value="resuelto">🟢 Resuelto</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas de seguimiento</label>
+            <textarea class="form-textarea" id="editarNotas" placeholder="Notas adicionales sobre el seguimiento"></textarea>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="app.volverSeguimiento()">← Cancelar</button>
+          <button class="btn btn-primary" onclick="app.guardarEdicionCaso()">💾 Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Suprimir errores de extensiones del navegador
+    window.addEventListener('error', function(e) {
+      if (e.message && e.message.includes('runtime.lastError')) {
+        e.preventDefault();
+        return true;
+      }
+    });
+  </script>
+</body>
+</html>
