@@ -1,23 +1,23 @@
 // ============================================
 // DIAGNOSTICO SOCIAL COMUNITARIO - APP.JS
 // PWA Offline-First para trabajo de campo
-// Version: 1.0.0
+// Version: 1.0.2
 // ============================================
 
 const CONFIG = {
-  VERSION: '1.0.0',
+  VERSION: '1.0.2',
   DB_NAME: 'DiagSocialDB',
-  DB_VERSION: 1,
-  SCRIPT_URL: '', // Se configura desde configuracion
-  TOKEN_SEGURIDAD: 'diag-social-2024', // Cambiar en produccion
-  GPS_TIMEOUT: 30000, // 30 segundos
-  BORRADOR_INTERVAL: 30000, // 30 segundos
+  DB_VERSION: 2,  // Incrementado para nueva estructura
+  SCRIPT_URL: '',
+  TOKEN_SEGURIDAD: 'diag-social-2024',
+  GPS_TIMEOUT: 30000,
+  BORRADOR_INTERVAL: 30000,
   MIN_CEDULA_DIGITOS: 6,
   MAX_VECINOS: 1000
 };
 
 // ============================================
-// CLASE PRINCIPAL DE LA APLICACION
+// CLASE PRINCIPAL
 // ============================================
 
 class DiagSocialApp {
@@ -27,7 +27,6 @@ class DiagSocialApp {
     this.configGeo = null;
     this.encuestadores = [];
     this.baseVecinos = [];
-    this.preguntasAdicionales = [];
     this.currentGPS = null;
     this.borradorTimer = null;
     this.currentEncuesta = null;
@@ -50,7 +49,7 @@ class DiagSocialApp {
       this.detectarConexion();
       this.mostrarPantallaInicial();
       this.iniciarAutoGuardado();
-      console.log('[App] Inicializacion completada');
+      console.log('[App] Inicializacion completada v' + CONFIG.VERSION);
     } catch (error) {
       console.error('[App] Error en inicializacion:', error);
       this.mostrarToast('Error al iniciar la aplicacion', 'error');
@@ -58,7 +57,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // INDEXEDDB - GESTION DE BASE DE DATOS LOCAL
+  // INDEXEDDB
   // ============================================
 
   inicializarIndexedDB() {
@@ -74,7 +73,6 @@ class DiagSocialApp {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
 
-        // Store: Encuestas
         if (!db.objectStoreNames.contains('encuestas')) {
           const store = db.createObjectStore('encuestas', { keyPath: 'id' });
           store.createIndex('tipo', 'tipo', { unique: false });
@@ -84,41 +82,23 @@ class DiagSocialApp {
           store.createIndex('estadoCaso', 'estadoCaso', { unique: false });
         }
 
-        // Store: Base de Vecinos
         if (!db.objectStoreNames.contains('vecinos')) {
           const store = db.createObjectStore('vecinos', { keyPath: 'Cedula' });
-          store.createIndex('nombre', 'Nombre', { unique: false });
+          store.createIndex('nombre', 'Nombre_y_Apellido', { unique: false });
         }
 
-        // Store: Encuestadores
         if (!db.objectStoreNames.contains('encuestadores')) {
           db.createObjectStore('encuestadores', { keyPath: 'id' });
         }
 
-        // Store: Configuracion
         if (!db.objectStoreNames.contains('configuracion')) {
           db.createObjectStore('configuracion', { keyPath: 'clave' });
         }
 
-        // Store: Session
         if (!db.objectStoreNames.contains('session')) {
           db.createObjectStore('session', { keyPath: 'id' });
         }
 
-        // Store: Preguntas Adicionales
-        if (!db.objectStoreNames.contains('preguntas')) {
-          const store = db.createObjectStore('preguntas', { keyPath: 'id' });
-          store.createIndex('cuestionario', 'cuestionario', { unique: false });
-          store.createIndex('activa', 'activa', { unique: false });
-        }
-
-        // Store: Respuestas Adicionales
-        if (!db.objectStoreNames.contains('respuestas_adicionales')) {
-          const store = db.createObjectStore('respuestas_adicionales', { keyPath: 'id', autoIncrement: true });
-          store.createIndex('idRegistro', 'idRegistro', { unique: false });
-        }
-
-        // Store: Metadatos
         if (!db.objectStoreNames.contains('metadatos')) {
           db.createObjectStore('metadatos', { keyPath: 'clave' });
         }
@@ -164,7 +144,6 @@ class DiagSocialApp {
   }
 
   getEncuestadoresDefault() {
-    // Datos de ejemplo - en produccion se sincronizan desde Google Sheets
     return [
       { id: 1, nombre: 'Maria Garcia', password: '1234', activo: true },
       { id: 2, nombre: 'Jose Rodriguez', password: '5678', activo: true },
@@ -222,7 +201,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // NAVEGACION Y PANTALLAS
+  // NAVEGACION
   // ============================================
 
   mostrarPantallaInicial() {
@@ -257,7 +236,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // CONFIGURACION GEOGRAFICA
+  // CONFIGURACION
   // ============================================
 
   async cargarConfiguracion() {
@@ -310,7 +289,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // GPS - CAPTURA AUTOMATICA
+  // GPS
   // ============================================
 
   async capturarGPS(pantalla) {
@@ -361,6 +340,52 @@ class DiagSocialApp {
   }
 
   // ============================================
+  // CALCULAR EDAD AUTOMATICAMENTE
+  // ============================================
+
+  calcularEdad(tipo) {
+    const fechaInputId = tipo === 'am' ? 'amFechaNacimiento' : 'nnaFechaNacimiento';
+    const edadInputId = tipo === 'am' ? 'amEdad' : 'nnaEdad';
+
+    const fechaNacimiento = document.getElementById(fechaInputId).value;
+    const edadInput = document.getElementById(edadInputId);
+
+    if (!fechaNacimiento) {
+      edadInput.value = '';
+      return;
+    }
+
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNacimiento);
+
+    let edad = hoy.getFullYear() - nacimiento.getFullYear();
+    const mes = hoy.getMonth() - nacimiento.getMonth();
+
+    // Ajustar si aun no ha cumplido anos este ano
+    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edad--;
+    }
+
+    // Validar que la edad sea razonable
+    if (edad < 0 || edad > 120) {
+      edadInput.value = '';
+      this.mostrarToast('Verifique la fecha de nacimiento', 'warning');
+      return;
+    }
+
+    edadInput.value = edad;
+
+    // Para NNA, validar que sea menor de 18
+    if (tipo === 'nna' && edad >= 18) {
+      this.mostrarToast('El NNA debe ser menor de 18 anos', 'warning');
+    }
+    // Para adultos mayores, validar que sea 60+
+    if (tipo === 'am' && edad < 60) {
+      this.mostrarToast('El adulto mayor debe tener 60+ anos', 'warning');
+    }
+  }
+
+  // ============================================
   // AUTOCOMPLETADO POR CEDULA
   // ============================================
 
@@ -388,9 +413,9 @@ class DiagSocialApp {
   }
 
   buscarVecino(tipo) {
-    const inputId = tipo === 'am' ? 'amCedula' : tipo === 'nna' ? 'nnaCedula' : 'repCedula';
+    const inputId = tipo === 'am' ? 'amCedula' : 'nnaCedulaRep';
     const cedula = document.getElementById(inputId).value;
-    const resultadoId = tipo === 'am' ? 'amBusquedaResultado' : tipo === 'nna' ? 'nnaBusquedaResultado' : 'repBusquedaResultado';
+    const resultadoId = tipo === 'am' ? 'amBusquedaResultado' : 'nnaBusquedaResultado';
     const contenedor = document.getElementById(resultadoId);
 
     if (cedula.length < CONFIG.MIN_CEDULA_DIGITOS) {
@@ -398,7 +423,6 @@ class DiagSocialApp {
       return;
     }
 
-    // Busqueda exacta primero, luego parcial
     let vecino = this.baseVecinos.find(v => v.Cedula === cedula);
     if (!vecino) {
       vecino = this.baseVecinos.find(v => v.Cedula && v.Cedula.includes(cedula));
@@ -406,55 +430,76 @@ class DiagSocialApp {
 
     if (vecino) {
       this.autocompletarCampos(tipo, vecino);
-      contenedor.innerHTML = `
-        <div class="alert alert-success">
-          <span>✅</span>
-          <span>Datos encontrados. <strong>Verifique la informacion</strong> y edite si esta desactualizada.</span>
-        </div>
-      `;
+      contenedor.innerHTML = '<div class="alert alert-success"><span>✅</span><span>Datos encontrados. <strong>Verifique la informacion</strong> y edite si esta desactualizada.</span></div>';
     } else {
       this.limpiarAutocompletado(tipo);
-      contenedor.innerHTML = `
-        <div class="alert alert-warning">
-          <span>⚠️</span>
-          <span>Cedula no registrada. <strong>Complete los datos manualmente</strong>.</span>
-        </div>
-      `;
+      contenedor.innerHTML = '<div class="alert alert-warning"><span>⚠️</span><span>Cedula no registrada. <strong>Complete los datos manualmente</strong>.</span></div>';
     }
   }
 
   autocompletarCampos(tipo, vecino) {
-    const campos = {
-      am: ['amNombre', 'amApellido', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia'],
-      nna: ['nnaNombre', 'nnaApellido', 'nnaSector', 'nnaCalle', 'nnaNroCasa', 'nnaReferencia'],
-      rep: ['repNombre', 'repApellido', 'repTelefono']
-    };
+    if (tipo === 'am') {
+      const nombreEl = document.getElementById('amNombre');
+      const apellidoEl = document.getElementById('amApellido');
 
-    const mapeo = {
-      amNombre: 'Nombre_y_Apellido', amApellido: 'Nombre_y_Apellido', amTelefono: 'Telefono',
-      amSector: 'Sector', amCalle: 'Calle_Avenida', amNroCasa: 'Nro_Casa', amReferencia: 'Referencia',
-      nnaNombre: 'Nombre_y_Apellido', nnaApellido: 'Nombre_y_Apellido', nnaSector: 'Sector',
-      nnaCalle: 'Calle_Avenida', nnaNroCasa: 'Nro_Casa', nnaReferencia: 'Referencia',
-      repNombre: 'Nombre_y_Apellido', repApellido: 'Nombre_y_Apellido', repTelefono: 'Telefono'
-    };
-
-    campos[tipo].forEach(campoId => {
-      const el = document.getElementById(campoId);
-      if (el && vecino[mapeo[campoId]]) {
-        el.value = vecino[mapeo[campoId]];
-        el.classList.add('autocomplete-field');
+      if (nombreEl && vecino.Nombre_y_Apellido) {
+        const partes = vecino.Nombre_y_Apellido.split(' ');
+        nombreEl.value = partes[0] || vecino.Nombre_y_Apellido;
+        if (apellidoEl) apellidoEl.value = partes.slice(1).join(' ') || '';
+        nombreEl.classList.add('autocomplete-field');
+        if (apellidoEl) apellidoEl.classList.add('autocomplete-field');
       }
-    });
+
+      const campos = [
+        { id: 'amTelefono', campo: 'Telefono' },
+        { id: 'amSector', campo: 'Sector' },
+        { id: 'amCalle', campo: 'Calle_Avenida' },
+        { id: 'amNroCasa', campo: 'Nro_Casa' },
+        { id: 'amReferencia', campo: 'Referencia' }
+      ];
+
+      campos.forEach(c => {
+        const el = document.getElementById(c.id);
+        if (el && vecino[c.campo]) {
+          el.value = vecino[c.campo];
+          el.classList.add('autocomplete-field');
+        }
+      });
+
+      // Autocompletar fecha de nacimiento si existe
+      if (vecino.Fecha_Nacimiento) {
+        const fechaEl = document.getElementById('amFechaNacimiento');
+        if (fechaEl) {
+          fechaEl.value = vecino.Fecha_Nacimiento;
+          fechaEl.classList.add('autocomplete-field');
+          this.calcularEdad('am');
+        }
+      }
+    } else if (tipo === 'nna') {
+      const nombreRepEl = document.getElementById('nnaNombreRep');
+      if (nombreRepEl && vecino.Nombre_y_Apellido) {
+        nombreRepEl.value = vecino.Nombre_y_Apellido;
+        nombreRepEl.classList.add('autocomplete-field');
+      }
+      const telefonoRepEl = document.getElementById('nnaTelefonoRep');
+      if (telefonoRepEl && vecino.Telefono) {
+        telefonoRepEl.value = vecino.Telefono;
+        telefonoRepEl.classList.add('autocomplete-field');
+      }
+      const direccionRepEl = document.getElementById('nnaDireccionRep');
+      if (direccionRepEl && vecino.Calle_Avenida) {
+        direccionRepEl.value = vecino.Calle_Avenida;
+        direccionRepEl.classList.add('autocomplete-field');
+      }
+    }
   }
 
   limpiarAutocompletado(tipo) {
-    const campos = {
-      am: ['amNombre', 'amApellido', 'amTelefono', 'amSector'],
-      nna: ['nnaNombre', 'nnaApellido'],
-      rep: ['repNombre', 'repApellido', 'repTelefono']
-    };
+    const campos = tipo === 'am' 
+      ? ['amNombre', 'amApellido', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia', 'amFechaNacimiento', 'amEdad']
+      : ['nnaNombreRep', 'nnaTelefonoRep', 'nnaDireccionRep'];
 
-    campos[tipo].forEach(campoId => {
+    campos.forEach(campoId => {
       const el = document.getElementById(campoId);
       if (el) {
         el.value = '';
@@ -483,60 +528,50 @@ class DiagSocialApp {
     this.currentEncuesta = { tipo: 'adultos', datos: {} };
     this.currentSeccion = null;
 
-    // Resetear todos los campos
-    ['amCedula', 'amNombre', 'amApellido', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia',
-     'amNecesidad', 'amBNecesidad'].forEach(id => {
+    const campos = ['amCedula', 'amNombre', 'amApellido', 'amFechaNacimiento', 'amEdad', 'amTelefono', 
+                    'amSector', 'amCalle', 'amNroCasa', 'amReferencia', 'amNecesidad', 'amBNecesidad'];
+    campos.forEach(id => {
       const el = document.getElementById(id);
       if (el) { el.value = ''; el.classList.remove('autocomplete-field'); }
     });
 
-    // Resetear selects
     ['amEstadoCaso', 'amBEstadoCaso'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.selectedIndex = 0;
     });
 
-    // Resetear botones de opcion
-    document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
+    document.querySelectorAll('#screenAdultos .option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
+    document.querySelectorAll('#screenAdultos .radio-item').forEach(item => item.classList.remove('selected'));
+    document.querySelectorAll('#screenAdultos input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('#screenAdultos .checkbox-item').forEach(item => item.classList.remove('checked'));
+    document.querySelectorAll('#screenAdultos input[type="checkbox"]').forEach(c => c.checked = false);
 
-    // Resetear radios
-    document.querySelectorAll('.radio-item').forEach(item => item.classList.remove('selected'));
-    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.getElementById('amB_SaludOtro')?.classList.add('hidden');
 
-    // Resetear checkboxes
-    document.querySelectorAll('.checkbox-item').forEach(item => item.classList.remove('checked'));
-    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
-
-    // Ocultar campos "Otro"
-    ['amB_SaludOtro'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.add('hidden');
-    });
-
-    // Mostrar paso 1
     document.getElementById('pasoAdultos1').classList.remove('hidden');
     document.getElementById('pasoAdultos2').classList.add('hidden');
     document.getElementById('pasoAdultos3A').classList.add('hidden');
     document.getElementById('pasoAdultos3B').classList.add('hidden');
 
-    // Resetear progreso
     document.getElementById('progressAdultos').style.width = '33%';
     document.getElementById('progressTextAdultos').textContent = 'Paso 1 de 3: Datos personales';
     document.getElementById('adultosPaso').textContent = 'Paso 1 de 3';
     document.getElementById('adultosSubtitle').textContent = 'Datos personales';
-
     document.getElementById('amBusquedaResultado').innerHTML = '';
   }
 
   adultosSiguiente(paso) {
     if (paso === 2) {
-      // Validar datos personales
       if (!document.getElementById('amCedula').value.trim()) {
         this.mostrarToast('Ingrese la cedula', 'error');
         return;
       }
       if (!document.getElementById('amNombre').value.trim() || !document.getElementById('amApellido').value.trim()) {
         this.mostrarToast('Ingrese nombre y apellido', 'error');
+        return;
+      }
+      if (!document.getElementById('amFechaNacimiento').value) {
+        this.mostrarToast('Ingrese la fecha de nacimiento', 'error');
         return;
       }
 
@@ -592,89 +627,59 @@ class DiagSocialApp {
   resetearFormularioNNA() {
     this.currentEncuesta = { tipo: 'nna', datos: {} };
 
-    // Resetear campos de texto
-    ['nnaCedula', 'nnaNombre', 'nnaApellido', 'nnaEdad', 'nnaGrado',
-     'repCedula', 'repNombre', 'repApellido', 'repTelefono', 'repParentesco',
-     'nnaFechaInscripcion', 'nnaNotas'].forEach(id => {
+    const campos = ['nnaCedulaRep', 'nnaNombreRep', 'nnaTelefonoRep', 'nnaDireccionRep',
+                    'nnaNombre', 'nnaFechaNacimiento', 'nnaEdad', 'nnaNecesidad'];
+    campos.forEach(id => {
       const el = document.getElementById(id);
       if (el) { el.value = ''; el.classList.remove('autocomplete-field'); }
     });
 
-    // Resetear selects
     document.getElementById('nnaEstadoCaso').selectedIndex = 0;
-
-    // Resetear botones
     document.querySelectorAll('#screenNNA .option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
-
-    // Resetear checkboxes
     document.querySelectorAll('#screenNNA .checkbox-item').forEach(item => item.classList.remove('checked'));
     document.querySelectorAll('#screenNNA input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('#screenNNA .radio-item').forEach(item => item.classList.remove('selected'));
+    document.querySelectorAll('#screenNNA input[type="radio"]').forEach(r => r.checked = false);
 
-    // Ocultar campos "Otro"
-    ['nnaDocOtro', 'nnaAccOtro', 'nnaLabOtro', 'nnaTutOtro', 'nnaEcoOtro'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.add('hidden');
-    });
+    document.getElementById('nnaMotivoOtro')?.classList.add('hidden');
+    document.getElementById('nnaEscolarizacionDetalle')?.classList.add('hidden');
 
-    // Mostrar paso 1
-    ['pasoNNA1', 'pasoNNA2', 'pasoNNA3', 'pasoNNA4'].forEach((id, i) => {
-      document.getElementById(id).classList.toggle('hidden', i !== 0);
-    });
+    document.getElementById('pasoNNA1').classList.remove('hidden');
+    document.getElementById('pasoNNA2').classList.add('hidden');
 
-    // Resetear progreso
-    document.getElementById('progressNNA').style.width = '25%';
-    document.getElementById('progressTextNNA').textContent = 'Paso 1 de 4: Datos del NNA';
-    document.getElementById('nnaPaso').textContent = 'Paso 1 de 4';
-    document.getElementById('nnaSubtitle').textContent = 'Datos del NNA';
-
+    document.getElementById('progressNNA').style.width = '50%';
+    document.getElementById('progressTextNNA').textContent = 'Paso 1 de 2: Datos personales';
+    document.getElementById('nnaPaso').textContent = 'Paso 1 de 2';
+    document.getElementById('nnaSubtitle').textContent = 'Datos personales';
     document.getElementById('nnaBusquedaResultado').innerHTML = '';
-    document.getElementById('repBusquedaResultado').innerHTML = '';
   }
 
   nnaSiguiente(paso) {
     if (paso === 2) {
-      if (!document.getElementById('nnaNombre').value.trim() || !document.getElementById('nnaApellido').value.trim()) {
-        this.mostrarToast('Ingrese nombre y apellido del NNA', 'error');
+      if (!document.getElementById('nnaNombre').value.trim()) {
+        this.mostrarToast('Ingrese nombre del NNA', 'error');
         return;
       }
-      if (!document.getElementById('nnaEdad').value) {
-        this.mostrarToast('Ingrese la edad del NNA', 'error');
+      if (!document.getElementById('nnaFechaNacimiento').value) {
+        this.mostrarToast('Ingrese la fecha de nacimiento del NNA', 'error');
         return;
       }
-      if (!document.getElementById('nnaGrado').value) {
-        this.mostrarToast('Seleccione el ultimo grado cursado', 'error');
+      const edad = parseInt(document.getElementById('nnaEdad').value);
+      if (!edad || edad < 0 || edad >= 18) {
+        this.mostrarToast('El NNA debe ser menor de 18 anos', 'error');
+        return;
+      }
+      if (!this.getOptionValue('nnaSexo')) {
+        this.mostrarToast('Seleccione el sexo del NNA', 'error');
         return;
       }
 
       document.getElementById('pasoNNA1').classList.add('hidden');
       document.getElementById('pasoNNA2').classList.remove('hidden');
-      document.getElementById('progressNNA').style.width = '50%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 4: Datos del representante';
-      document.getElementById('nnaPaso').textContent = 'Paso 2 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Datos del representante';
-    } else if (paso === 3) {
-      if (!document.getElementById('repNombre').value.trim() || !document.getElementById('repApellido').value.trim()) {
-        this.mostrarToast('Ingrese nombre y apellido del representante', 'error');
-        return;
-      }
-      if (!document.getElementById('repParentesco').value) {
-        this.mostrarToast('Seleccione el parentesco', 'error');
-        return;
-      }
-
-      document.getElementById('pasoNNA2').classList.add('hidden');
-      document.getElementById('pasoNNA3').classList.remove('hidden');
-      document.getElementById('progressNNA').style.width = '75%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 3 de 4: Causas de desescolarizacion';
-      document.getElementById('nnaPaso').textContent = 'Paso 3 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Causas de desescolarizacion';
-    } else if (paso === 4) {
-      document.getElementById('pasoNNA3').classList.add('hidden');
-      document.getElementById('pasoNNA4').classList.remove('hidden');
       document.getElementById('progressNNA').style.width = '100%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 4 de 4: Seguimiento';
-      document.getElementById('nnaPaso').textContent = 'Paso 4 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Seguimiento del caso';
+      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 2: Situacion de escolarizacion';
+      document.getElementById('nnaPaso').textContent = 'Paso 2 de 2';
+      document.getElementById('nnaSubtitle').textContent = 'Situacion de escolarizacion';
     }
   }
 
@@ -682,52 +687,41 @@ class DiagSocialApp {
     if (paso === 1) {
       document.getElementById('pasoNNA2').classList.add('hidden');
       document.getElementById('pasoNNA1').classList.remove('hidden');
-      document.getElementById('progressNNA').style.width = '25%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 1 de 4: Datos del NNA';
-      document.getElementById('nnaPaso').textContent = 'Paso 1 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Datos del NNA';
-    } else if (paso === 2) {
-      document.getElementById('pasoNNA3').classList.add('hidden');
-      document.getElementById('pasoNNA2').classList.remove('hidden');
       document.getElementById('progressNNA').style.width = '50%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 4: Datos del representante';
-      document.getElementById('nnaPaso').textContent = 'Paso 2 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Datos del representante';
-    } else if (paso === 3) {
-      document.getElementById('pasoNNA4').classList.add('hidden');
-      document.getElementById('pasoNNA3').classList.remove('hidden');
-      document.getElementById('progressNNA').style.width = '75%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 3 de 4: Causas de desescolarizacion';
-      document.getElementById('nnaPaso').textContent = 'Paso 3 de 4';
-      document.getElementById('nnaSubtitle').textContent = 'Causas de desescolarizacion';
+      document.getElementById('progressTextNNA').textContent = 'Paso 1 de 2: Datos personales';
+      document.getElementById('nnaPaso').textContent = 'Paso 1 de 2';
+      document.getElementById('nnaSubtitle').textContent = 'Datos personales';
+    }
+  }
+
+  toggleEscolarizacion(escolarizado) {
+    const detalle = document.getElementById('nnaEscolarizacionDetalle');
+    if (detalle) {
+      detalle.classList.toggle('hidden', !escolarizado);
     }
   }
 
   // ============================================
-  // INTERACCION DE FORMULARIOS (UI)
+  // INTERACCION UI
   // ============================================
 
   selectOption(btn) {
     const name = btn.dataset.name;
     const value = btn.dataset.value;
 
-    // Remover seleccion previa del mismo grupo
     document.querySelectorAll(`[data-name="${name}"]`).forEach(b => {
       b.classList.remove('selected-yes', 'selected-no');
     });
 
-    // Aplicar nueva seleccion
     btn.classList.add(value === 'SI' ? 'selected-yes' : 'selected-no');
   }
 
   selectRadio(item, name) {
-    // Remover seleccion previa
     document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
       r.checked = false;
       r.closest('.radio-item')?.classList.remove('selected');
     });
 
-    // Seleccionar nuevo
     const radio = item.querySelector('input[type="radio"]');
     radio.checked = true;
     item.classList.add('selected');
@@ -748,7 +742,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // GUARDADO DE ENCUESTAS
+  // GUARDADO
   // ============================================
 
   async guardarEncuesta(tipo, seccion = null) {
@@ -756,7 +750,7 @@ class DiagSocialApp {
     const fechaHora = new Date().toISOString();
     const datos = this.recolectarDatos(tipo, seccion);
 
-    if (!datos) return; // Validacion fallo
+    if (!datos) return;
 
     const encuesta = {
       id: id,
@@ -804,10 +798,11 @@ class DiagSocialApp {
     };
 
     if (tipo === 'adultos') {
-      // Datos personales
       datos.cedula = document.getElementById('amCedula').value.trim();
-      datos.nombre = (document.getElementById('amNombre').value.trim() + ' ' + document.getElementById('amApellido').value.trim()).trim();  // Nombre_y_Apellido completo
-      datos.apellido = '';  // Ahora vacio, incluido en nombre
+      datos.nombre = document.getElementById('amNombre').value.trim();
+      datos.apellido = document.getElementById('amApellido').value.trim();
+      datos.fechaNacimiento = document.getElementById('amFechaNacimiento').value;
+      datos.edad = document.getElementById('amEdad').value;
       datos.telefono = document.getElementById('amTelefono').value.trim();
       datos.sector = document.getElementById('amSector').value.trim();
       datos.calle = document.getElementById('amCalle').value.trim();
@@ -816,8 +811,12 @@ class DiagSocialApp {
       datos.autocompletado = document.getElementById('amNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
 
       if (!esBorrador) {
-        if (!datos.cedula || !datos.nombre || !datos.apellido) {
-          this.mostrarToast('Complete los datos personales obligatorios', 'error');
+        if (!datos.cedula || !datos.nombre || !datos.apellido || !datos.fechaNacimiento) {
+          this.mostrarToast('Complete todos los datos personales obligatorios', 'error');
+          return null;
+        }
+        if (parseInt(datos.edad) < 60) {
+          this.mostrarToast('El adulto mayor debe tener 60+ anos', 'error');
           return null;
         }
       }
@@ -846,7 +845,7 @@ class DiagSocialApp {
         datos.saludInsufCardiaca = document.getElementById('amB_InsufCardiaca').checked ? 'SI' : 'NO';
         datos.saludArtritis = document.getElementById('amB_Artritis').checked ? 'SI' : 'NO';
         datos.saludEsclerosis = document.getElementById('amB_Esclerosis').checked ? 'SI' : 'NO';
-        datos.saludOtro = document.getElementById('amB_SaludOtroCheck').checked ? 
+        datos.saludOtro = document.getElementById('amB_SaludOtroCheck').checked ?
           (document.querySelector('#amB_SaludOtro input')?.value || 'SI') : 'NO';
         datos.situacionEconomica = this.getRadioValue('amB_Economica');
         datos.necesidad = document.getElementById('amBNecesidad').value.trim();
@@ -856,74 +855,47 @@ class DiagSocialApp {
         datos.notasSeguimiento = '';
       }
     } else if (tipo === 'nna') {
-      datos.nnaCedula = document.getElementById('nnaCedula').value.trim();
-      datos.nnaNombre = (document.getElementById('nnaNombre').value.trim() + ' ' + document.getElementById('nnaApellido').value.trim()).trim();  // Nombre_y_Apellido NNA completo
-      datos.nnaApellido = '';  // Ahora vacio, incluido en nombre
-      datos.nnaEdad = document.getElementById('nnaEdad').value;
-      datos.nnaGrado = document.getElementById('nnaGrado').value;
-      datos.nnaAutocompletado = document.getElementById('nnaNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
+      datos.repCedula = document.getElementById('nnaCedulaRep').value.trim();
+      datos.repNombre = document.getElementById('nnaNombreRep').value.trim();
+      datos.repTelefono = document.getElementById('nnaTelefonoRep').value.trim();
+      datos.repDireccion = document.getElementById('nnaDireccionRep').value.trim();
+      datos.repAutocompletado = document.getElementById('nnaNombreRep').classList.contains('autocomplete-field') ? 'SI' : 'NO';
 
-      datos.repCedula = document.getElementById('repCedula').value.trim();
-      datos.repNombre = (document.getElementById('repNombre').value.trim() + ' ' + document.getElementById('repApellido').value.trim()).trim();  // Nombre_y_Apellido representante completo
-      datos.repApellido = '';  // Ahora vacio, incluido en nombre
-      datos.repTelefono = document.getElementById('repTelefono').value.trim();
-      datos.repParentesco = document.getElementById('repParentesco').value;
-      datos.repAutocompletado = document.getElementById('repNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
+      datos.nnaNombre = document.getElementById('nnaNombre').value.trim();
+      datos.nnaFechaNacimiento = document.getElementById('nnaFechaNacimiento').value;
+      datos.nnaEdad = document.getElementById('nnaEdad').value;
+      datos.nnaSexo = this.getOptionValue('nnaSexo');
+
+      datos.escolarizado = this.getOptionValue('nnaEscolarizado');
+      datos.institucion = document.getElementById('nnaInstitucion')?.value?.trim() || '';
+      datos.grado = document.getElementById('nnaGrado')?.value?.trim() || '';
+
+      datos.motivoEconomico = document.getElementById('nnaMotivo1').checked ? 'SI' : 'NO';
+      datos.motivoDiscapacidad = document.getElementById('nnaMotivo2').checked ? 'SI' : 'NO';
+      datos.motivoTrabajo = document.getElementById('nnaMotivo3').checked ? 'SI' : 'NO';
+      datos.motivoEmbarazo = document.getElementById('nnaMotivo4').checked ? 'SI' : 'NO';
+      datos.motivoViolencia = document.getElementById('nnaMotivo5').checked ? 'SI' : 'NO';
+      datos.motivoDesplazamiento = document.getElementById('nnaMotivo6').checked ? 'SI' : 'NO';
+      datos.motivoDocumentos = document.getElementById('nnaMotivo7').checked ? 'SI' : 'NO';
+      datos.motivoOtro = document.getElementById('nnaMotivoOtroCheck').checked ?
+        (document.querySelector('#nnaMotivoOtro input')?.value || 'SI') : 'NO';
+
+      datos.recibeBeneficio = this.getOptionValue('nnaBeneficio');
+      datos.tipoVivienda = this.getRadioValue('nnaVivienda');
+
+      datos.necesidad = document.getElementById('nnaNecesidad').value.trim();
+      datos.estadoCaso = document.getElementById('nnaEstadoCaso').value;
 
       if (!esBorrador) {
-        if (!datos.nnaNombre || !datos.nnaApellido || !datos.nnaEdad || !datos.nnaGrado) {
+        if (!datos.nnaNombre || !datos.nnaFechaNacimiento || !datos.nnaSexo) {
           this.mostrarToast('Complete los datos del NNA', 'error');
           return null;
         }
-        if (!datos.repNombre || !datos.repApellido || !datos.repParentesco) {
-          this.mostrarToast('Complete los datos del representante', 'error');
+        if (parseInt(datos.nnaEdad) >= 18) {
+          this.mostrarToast('El NNA debe ser menor de 18 anos', 'error');
           return null;
         }
       }
-
-      // Documentos
-      datos.docFaltaCedula = document.getElementById('nnaDocCedula').checked ? 'SI' : 'NO';
-      datos.docFaltaPartida = document.getElementById('nnaDocPartida').checked ? 'SI' : 'NO';
-      datos.docFaltaConstancia = document.getElementById('nnaDocConstancia').checked ? 'SI' : 'NO';
-      datos.docOtro = document.getElementById('nnaDocOtroCheck').checked ? 
-        (document.querySelector('#nnaDocOtro input')?.value || 'SI') : 'NO';
-
-      // Acceso
-      datos.accesoLejania = document.getElementById('nnaAccLejania').checked ? 'SI' : 'NO';
-      datos.accesoTransporte = document.getElementById('nnaAccTransporte').checked ? 'SI' : 'NO';
-      datos.accesoRiesgos = document.getElementById('nnaAccRiesgos').checked ? 'SI' : 'NO';
-      datos.accesoOtro = document.getElementById('nnaAccOtroCheck').checked ? 
-        (document.querySelector('#nnaAccOtro input')?.value || 'SI') : 'NO';
-
-      // Laboral
-      datos.laboralAportar = document.getElementById('nnaLabAportar').checked ? 'SI' : 'NO';
-      datos.laboralInformal = document.getElementById('nnaLabInformal').checked ? 'SI' : 'NO';
-      datos.laboralRep = document.getElementById('nnaLabRep').checked ? 'SI' : 'NO';
-      datos.laboralHermanos = document.getElementById('nnaLabHermanos').checked ? 'SI' : 'NO';
-      datos.laboralOtro = document.getElementById('nnaLabOtroCheck').checked ? 
-        (document.querySelector('#nnaLabOtro input')?.value || 'SI') : 'NO';
-
-      // Tutelaje
-      datos.tutelajeAusencia = document.getElementById('nnaTutAusencia').checked ? 'SI' : 'NO';
-      datos.tutelajeDesconocimiento = document.getElementById('nnaTutDesconocimiento').checked ? 'SI' : 'NO';
-      datos.tutelajeAcompanamiento = document.getElementById('nnaTutAcompanamiento').checked ? 'SI' : 'NO';
-      datos.tutelajeOtro = document.getElementById('nnaTutOtroCheck').checked ? 
-        (document.querySelector('#nnaTutOtro input')?.value || 'SI') : 'NO';
-
-      // Economico
-      datos.economicoUtiles = document.getElementById('nnaEcoUtiles').checked ? 'SI' : 'NO';
-      datos.economicoAlimentacion = document.getElementById('nnaEcoAlimentacion').checked ? 'SI' : 'NO';
-      datos.economicoDeudas = document.getElementById('nnaEcoDeudas').checked ? 'SI' : 'NO';
-      datos.economicoInestabilidad = document.getElementById('nnaEcoInestabilidad').checked ? 'SI' : 'NO';
-      datos.economicoApoyo = document.getElementById('nnaEcoApoyo').checked ? 'SI' : 'NO';
-      datos.economicoOtro = document.getElementById('nnaEcoOtroCheck').checked ? 
-        (document.querySelector('#nnaEcoOtro input')?.value || 'SI') : 'NO';
-
-      // Seguimiento
-      datos.inscritoEscuela = this.getOptionValue('nnaInscrito');
-      datos.fechaInscripcion = document.getElementById('nnaFechaInscripcion').value;
-      datos.notasSeguimiento = document.getElementById('nnaNotas').value.trim();
-      datos.estadoCaso = document.getElementById('nnaEstadoCaso').value;
     }
 
     return datos;
@@ -981,19 +953,8 @@ class DiagSocialApp {
 
     try {
       this.mostrarLoading('Sincronizando datos...');
-
-      // 1. Descargar Base de Vecinos actualizada
       await this.descargarBaseVecinos();
-
-      // 2. Enviar encuestas pendientes
       await this.enviarEncuestasPendientes();
-
-      // 3. Descargar preguntas adicionales
-      await this.descargarPreguntasAdicionales();
-
-      // 4. Actualizar encuestadores
-      await this.descargarEncuestadores();
-
       await this.guardarMetadato('ultima_sync', new Date().toISOString());
       this.actualizarEstadisticasMenu();
       this.mostrarToast('Sincronizacion completada', 'success');
@@ -1020,7 +981,6 @@ class DiagSocialApp {
 
       const data = await response.json();
       if (data.success && data.vecinos) {
-        // Limpiar y reinsertar
         await this.dbOperation('vecinos', 'readwrite', store => store.clear());
         for (const vecino of data.vecinos) {
           await this.dbOperation('vecinos', 'readwrite', store => store.put(vecino));
@@ -1037,7 +997,7 @@ class DiagSocialApp {
 
   async enviarEncuestasPendientes() {
     try {
-      const pendientes = await this.dbOperation('encuestas', 'readonly', 
+      const pendientes = await this.dbOperation('encuestas', 'readonly',
         store => store.index('estadoSync').getAll('pendiente'));
 
       if (pendientes.length === 0) {
@@ -1076,71 +1036,31 @@ class DiagSocialApp {
     }
   }
 
-  async descargarPreguntasAdicionales() {
-    try {
-      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getPreguntas&token=${CONFIG.TOKEN_SEGURIDAD}`);
-      if (!response.ok) return;
-
-      const data = await response.json();
-      if (data.success && data.preguntas) {
-        await this.dbOperation('preguntas', 'readwrite', store => store.clear());
-        for (const pregunta of data.preguntas) {
-          await this.dbOperation('preguntas', 'readwrite', store => store.put(pregunta));
-        }
-        this.preguntasAdicionales = data.preguntas;
-      }
-    } catch (e) {
-      console.error('[Sync] Error descargando preguntas:', e);
-    }
-  }
-
-  async descargarEncuestadores() {
-    try {
-      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getEncuestadores&token=${CONFIG.TOKEN_SEGURIDAD}`);
-      if (!response.ok) return;
-
-      const data = await response.json();
-      if (data.success && data.encuestadores) {
-        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
-        for (const enc of data.encuestadores) {
-          await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
-        }
-        this.encuestadores = data.encuestadores;
-        this.actualizarSelectEncuestadores();
-      }
-    } catch (e) {
-      console.error('[Sync] Error descargando encuestadores:', e);
-    }
-  }
-
   async guardarMetadato(clave, valor) {
     await this.dbOperation('metadatos', 'readwrite', store => store.put({ clave, valor }));
   }
 
   // ============================================
-  // SEGUIMIENTO DE CASOS
+  // SEGUIMIENTO
   // ============================================
 
   async abrirSeguimiento() {
     this.mostrarPantalla('screenSeguimiento');
-    await this.cargarCasos('todos');
+    await this.filtrarCasos();
   }
 
-  async cargarCasos(filtro) {
+  async filtrarCasos() {
     try {
-      let casos = await this.dbOperation('encuestas', 'readonly', store => store.getAll());
+      const tipoFiltro = document.getElementById('filtroTipo').value;
+      const estadoFiltro = document.getElementById('filtroEstado').value;
 
-      // Filtrar por encuestador actual
+      let casos = await this.dbOperation('encuestas', 'readonly', store => store.getAll());
       casos = casos.filter(c => c.encuestadorId === this.session.encuestadorId);
 
-      // Aplicar filtros adicionales
-      if (filtro === 'adultos') casos = casos.filter(c => c.tipo === 'adultos');
-      else if (filtro === 'nna') casos = casos.filter(c => c.tipo === 'nna');
-      else if (filtro === 'pendiente') casos = casos.filter(c => c.datos.estadoCaso === 'pendiente');
-      else if (filtro === 'proceso') casos = casos.filter(c => c.datos.estadoCaso === 'proceso');
-      else if (filtro === 'resuelto') casos = casos.filter(c => c.datos.estadoCaso === 'resuelto');
+      if (tipoFiltro) casos = casos.filter(c => c.tipo === tipoFiltro);
+      if (estadoFiltro) casos = casos.filter(c => c.datos.estadoCaso === estadoFiltro);
 
-      const contenedor = document.getElementById('casosLista');
+      const contenedor = document.getElementById('listaCasos');
 
       if (casos.length === 0) {
         contenedor.innerHTML = '<div class="alert alert-info"><span>📋</span><span>No hay casos registrados</span></div>';
@@ -1155,147 +1075,67 @@ class DiagSocialApp {
 
   renderizarCaso(caso) {
     const estado = caso.datos.estadoCaso || 'pendiente';
-    const nombre = caso.tipo === 'adultos' 
-      ? `${caso.datos.nombre} ${caso.datos.apellido}`
-      : `${caso.datos.nnaNombre} ${caso.datos.nnaApellido}`;
+    const nombre = caso.tipo === 'adultos'
+      ? `${caso.datos.nombre || ''} ${caso.datos.apellido || ''}`
+      : caso.datos.nnaNombre || '';
     const tipo = caso.tipo === 'adultos' ? '👴 Adulto Mayor' : '👦 NNA';
     const seccion = caso.seccion ? ` - Sec. ${caso.seccion}` : '';
     const fecha = this.formatearFecha(caso.fecha);
     const sync = caso.estadoSync === 'sincronizado' ? '✅' : '🔴';
 
-    return `
-      <div class="caso-item ${estado}" onclick="app.editarCaso('${caso.id}')">
-        <div class="caso-header">
-          <div class="caso-nombre">${nombre}</div>
-          <div class="caso-estado ${estado}">${estado.toUpperCase()}</div>
-        </div>
-        <div class="caso-info">
-          ${tipo}${seccion} | ${sync} ${fecha} | ${caso.encuestador}
-        </div>
+    return `<div class="caso-item ${estado}" onclick="app.abrirEditarCaso('${caso.id}')">
+      <div class="caso-header">
+        <span class="caso-nombre">${nombre}</span>
+        <span class="caso-estado ${estado}">${estado.toUpperCase()}</span>
       </div>
-    `;
+      <div class="caso-info">${tipo}${seccion} | ${sync} ${fecha} | ${caso.encuestador}</div>
+    </div>`;
   }
 
-  filtrarCasos(filtro, btn) {
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    this.cargarCasos(filtro);
-  }
-
-  async editarCaso(id) {
+  async abrirEditarCaso(id) {
     try {
       const caso = await this.dbOperation('encuestas', 'readonly', store => store.get(id));
       if (!caso) return;
 
       this.casoEditando = caso;
-      const modal = document.getElementById('modalEditarCaso');
-      const titulo = document.getElementById('modalCasoTitulo');
-      const contenido = document.getElementById('modalCasoContent');
-
       const nombre = caso.tipo === 'adultos'
-        ? `${caso.datos.nombre} ${caso.datos.apellido}`
-        : `${caso.datos.nnaNombre} ${caso.datos.nnaApellido}`;
+        ? `${caso.datos.nombre || ''} ${caso.datos.apellido || ''}`
+        : caso.datos.nnaNombre || '';
 
-      titulo.textContent = `Editar: ${nombre}`;
+      document.getElementById('editarCasoSubtitle').textContent = `Editando: ${nombre}`;
+      document.getElementById('editarNecesidad').value = caso.datos.necesidad || '';
+      document.getElementById('editarEstadoCaso').value = caso.datos.estadoCaso || 'pendiente';
+      document.getElementById('editarNotas').value = caso.datos.notasSeguimiento || '';
 
-      if (caso.tipo === 'adultos') {
-        contenido.innerHTML = `
-          <div class="form-group">
-            <label class="form-label">Necesidad detectada</label>
-            <textarea class="form-textarea" id="editNecesidad">${caso.datos.necesidad || ''}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fue resuelta la necesidad?</label>
-            <div class="option-group">
-              <button type="button" class="option-btn ${caso.datos.necesidadResuelta === 'SI' ? 'selected-yes' : ''}" data-name="editResuelta" data-value="SI" onclick="app.selectOption(this)">SI</button>
-              <button type="button" class="option-btn ${caso.datos.necesidadResuelta === 'NO' ? 'selected-no' : ''}" data-name="editResuelta" data-value="NO" onclick="app.selectOption(this)">NO</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fecha de resolucion</label>
-            <input type="date" class="form-input" id="editFechaResolucion" value="${caso.datos.fechaResolucion || ''}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Notas de seguimiento</label>
-            <textarea class="form-textarea" id="editNotas">${caso.datos.notasSeguimiento || ''}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Estado del caso</label>
-            <select class="form-select" id="editEstadoCaso">
-              <option value="pendiente" ${caso.datos.estadoCaso === 'pendiente' ? 'selected' : ''}>🔴 Pendiente</option>
-              <option value="proceso" ${caso.datos.estadoCaso === 'proceso' ? 'selected' : ''}>🟡 En proceso</option>
-              <option value="resuelto" ${caso.datos.estadoCaso === 'resuelto' ? 'selected' : ''}>🟢 Resuelto</option>
-            </select>
-          </div>
-        `;
-      } else {
-        contenido.innerHTML = `
-          <div class="form-group">
-            <label class="form-label">Fue inscrito en la escuela?</label>
-            <div class="option-group">
-              <button type="button" class="option-btn ${caso.datos.inscritoEscuela === 'SI' ? 'selected-yes' : ''}" data-name="editInscrito" data-value="SI" onclick="app.selectOption(this)">SI</button>
-              <button type="button" class="option-btn ${caso.datos.inscritoEscuela === 'NO' ? 'selected-no' : ''}" data-name="editInscrito" data-value="NO" onclick="app.selectOption(this)">NO</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fecha de inscripcion</label>
-            <input type="date" class="form-input" id="editFechaInscripcion" value="${caso.datos.fechaInscripcion || ''}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Notas de seguimiento</label>
-            <textarea class="form-textarea" id="editNotas">${caso.datos.notasSeguimiento || ''}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Estado del caso</label>
-            <select class="form-select" id="editEstadoCaso">
-              <option value="pendiente" ${caso.datos.estadoCaso === 'pendiente' ? 'selected' : ''}>🔴 Pendiente</option>
-              <option value="proceso" ${caso.datos.estadoCaso === 'proceso' ? 'selected' : ''}>🟡 En proceso</option>
-              <option value="resuelto" ${caso.datos.estadoCaso === 'resuelto' ? 'selected' : ''}>🟢 Resuelto</option>
-            </select>
-          </div>
-        `;
-      }
-
-      modal.classList.add('active');
+      this.mostrarPantalla('screenEditarCaso');
     } catch (e) {
       console.error('[Casos] Error editando:', e);
     }
   }
 
-  async guardarCasoEditado() {
+  volverSeguimiento() {
+    this.mostrarPantalla('screenSeguimiento');
+    this.casoEditando = null;
+  }
+
+  async guardarEdicionCaso() {
     if (!this.casoEditando) return;
 
     const caso = this.casoEditando;
-
-    if (caso.tipo === 'adultos') {
-      caso.datos.necesidad = document.getElementById('editNecesidad').value.trim();
-      caso.datos.necesidadResuelta = this.getOptionValue('editResuelta');
-      caso.datos.fechaResolucion = document.getElementById('editFechaResolucion').value;
-      caso.datos.notasSeguimiento = document.getElementById('editNotas').value.trim();
-      caso.datos.estadoCaso = document.getElementById('editEstadoCaso').value;
-    } else {
-      caso.datos.inscritoEscuela = this.getOptionValue('editInscrito');
-      caso.datos.fechaInscripcion = document.getElementById('editFechaInscripcion').value;
-      caso.datos.notasSeguimiento = document.getElementById('editNotas').value.trim();
-      caso.datos.estadoCaso = document.getElementById('editEstadoCaso').value;
-    }
-
+    caso.datos.necesidad = document.getElementById('editarNecesidad').value.trim();
+    caso.datos.estadoCaso = document.getElementById('editarEstadoCaso').value;
+    caso.datos.notasSeguimiento = document.getElementById('editarNotas').value.trim();
     caso.estadoSync = 'pendiente';
     caso.fecha = new Date().toISOString();
 
     await this.dbOperation('encuestas', 'readwrite', store => store.put(caso));
-    this.cerrarModal();
     this.mostrarToast('Caso actualizado', 'success');
-    this.cargarCasos('todos');
-  }
-
-  cerrarModal() {
-    document.getElementById('modalEditarCaso').classList.remove('active');
-    this.casoEditando = null;
+    this.volverSeguimiento();
+    await this.filtrarCasos();
   }
 
   // ============================================
-  // UTILIDADES Y UI
+  // UTILIDADES
   // ============================================
 
   async actualizarEstadisticasMenu() {
@@ -1362,10 +1202,6 @@ class DiagSocialApp {
     this.currentGPS = null;
   }
 
-  // ============================================
-  // AUTO-GUARDADO DE BORRADORES
-  // ============================================
-
   iniciarAutoGuardado() {
     setInterval(() => {
       if (this.currentEncuesta && (this.currentEncuesta.estadoSync === 'borrador' || !this.currentEncuesta.estadoSync)) {
@@ -1376,54 +1212,23 @@ class DiagSocialApp {
     }, CONFIG.BORRADOR_INTERVAL);
   }
 
-  // ============================================
-  // CONFIGURACION DE EVENTOS
-  // ============================================
-
   configurarEventos() {
-    // Registrar Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
         .then(reg => console.log('[SW] Registrado:', reg.scope))
         .catch(err => console.error('[SW] Error:', err));
     }
 
-    // Prevenir zoom en inputs numericos en iOS
     document.addEventListener('focusin', (e) => {
       if (e.target.tagName === 'INPUT' && e.target.type === 'number') {
         e.target.style.fontSize = '16px';
       }
     });
 
-    // Manejar tecla Enter en login
     document.getElementById('loginPin')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.login();
     });
-
-    // Cerrar modal al hacer click fuera
-    document.getElementById('modalEditarCaso')?.addEventListener('click', (e) => {
-      if (e.target.id === 'modalEditarCaso') this.cerrarModal();
-    });
   }
-
-  // ============================================
-  // VALIDACION DE CEDULA (Algoritmo Modulo 10)
-  // ============================================
-
-  validarCedulaVenezuela(cedula) {
-    if (!cedula || cedula.length < 6 || cedula.length > 9) return false;
-    if (!/^\d+$/.test(cedula)) return false;
-
-    // Para cedulas venezolanas, validacion basica de formato
-    // Las cedulas venezolanas son numericas, tipicamente 7-8 digitos
-    // V (Venezolano) o E (Extranjero) + 6-8 digitos
-    // En este sistema trabajamos solo con el numero
-    return true;
-  }
-
-  // ============================================
-  // EXPORTACION DE RESPALDO (CSV)
-  // ============================================
 
   async exportarRespaldoCSV() {
     try {
@@ -1433,13 +1238,14 @@ class DiagSocialApp {
         return;
       }
 
-      let csv = 'ID,Tipo,Seccion,Encuestador,Fecha,EstadoSync,Cedula,Nombre,Apellido\n';
+      let csv = 'ID,Tipo,Seccion,Encuestador,Fecha,EstadoSync,Cedula,Nombre,Apellido,Edad\n';
       encuestas.forEach(e => {
-        const nombre = e.tipo === 'adultos' 
+        const nombre = e.tipo === 'adultos'
           ? `${e.datos.nombre || ''} ${e.datos.apellido || ''}`
-          : `${e.datos.nnaNombre || ''} ${e.datos.nnaApellido || ''}`;
-        const cedula = e.tipo === 'adultos' ? (e.datos.cedula || '') : (e.datos.nnaCedula || '');
-        csv += `${e.id},${e.tipo},${e.seccion || ''},${e.encuestador},${e.fecha},${e.estadoSync},${cedula},"${nombre}"\n`;
+          : `${e.datos.nnaNombre || ''}`;
+        const cedula = e.tipo === 'adultos' ? (e.datos.cedula || '') : (e.datos.repCedula || '');
+        const edad = e.tipo === 'adultos' ? (e.datos.edad || '') : (e.datos.nnaEdad || '');
+        csv += `${e.id},${e.tipo},${e.seccion || ''},${e.encuestador},${e.fecha},${e.estadoSync},${cedula},"${nombre}",${edad}\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1457,15 +1263,13 @@ class DiagSocialApp {
 }
 
 // ============================================
-// INICIALIZACION GLOBAL
+// INICIALIZACION
 // ============================================
 
 const app = new DiagSocialApp();
 
-// Esperar a que DOM este listo
 document.addEventListener('DOMContentLoaded', () => {
   app.init();
 });
 
-// Exponer app globalmente para debugging
 window.app = app;

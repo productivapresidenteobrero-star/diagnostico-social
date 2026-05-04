@@ -1,7 +1,7 @@
 // Service Worker - Diagnostico Social Comunitario
-// Version: 1.0.1
+// Version: 1.0.2
 
-const CACHE_NAME = 'diagsocial-v1';
+const CACHE_NAME = 'diagsocial-v1.0.2';
 const BASE_PATH = '/diagnostico-social';
 const STATIC_ASSETS = [
   BASE_PATH + '/',
@@ -13,7 +13,7 @@ const STATIC_ASSETS = [
 
 // Instalacion: cachear recursos estaticos
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando Service Worker...');
+  console.log('[SW] Instalando Service Worker v1.0.2...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Cacheando recursos estaticos...');
@@ -43,7 +43,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: estrategia Cache-First para recursos estaticos
+// Fetch: Network-First para index.html (SIEMPRE actualizado), Cache-First para el resto
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -53,11 +53,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Para recursos estaticos: Cache-First
-  if (request.mode === 'navigate' || 
-      request.destination === 'style' || 
-      request.destination === 'script' ||
-      request.destination === 'document') {
+  // Para index.html y navegacion: Network-First (trae version nueva si hay internet)
+  if (request.mode === 'navigate' || (request.destination === 'document' && url.pathname.endsWith('index.html'))) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(request).then((cachedResponse) => {
+            return cachedResponse || caches.match(BASE_PATH + '/index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // Para recursos estaticos (CSS, JS, manifest): Cache-First
+  if (request.destination === 'style' || request.destination === 'script' || request.destination === 'manifest') {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
         if (cachedResponse) {
@@ -72,11 +91,6 @@ self.addEventListener('fetch', (event) => {
             cache.put(request, responseToCache);
           });
           return networkResponse;
-        }).catch(() => {
-          // Si falla la red y no hay cache, mostrar pagina offline
-          if (request.mode === 'navigate') {
-            return caches.match(BASE_PATH + '/index.html');
-          }
         });
       })
     );
@@ -95,21 +109,6 @@ self.addEventListener('sync', (event) => {
       })
     );
   }
-});
-
-// Notificaciones push
-self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
-  const options = {
-    body: data.body || 'Sincronizacion completada',
-    icon: BASE_PATH + '/icon-192.png',
-    badge: BASE_PATH + '/icon-192.png',
-    tag: 'sync-notification',
-    requireInteraction: false
-  };
-  event.waitUntil(
-    self.registration.showNotification('Diagnostico Social', options)
-  );
 });
 
 // Mensajes desde la app principal

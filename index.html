@@ -21,7 +21,7 @@
       <p class="loading-text" id="loadingText">Cargando...</p>
     </div>
 
-    <!-- PANTALLA LOGIN -->
+    <!-- ==================== LOGIN ==================== -->
     <div class="login-screen" id="screenLogin">
       <div class="login-card">
         <div class="login-logo">📋</div>
@@ -45,12 +45,12 @@
           <span class="btn-icon">🔐</span> Iniciar Sesion
         </button>
         <div class="form-hint" style="text-align:center; margin-top:var(--spacing-md);">
-          <span id="loginVersion">v1.0.0</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
+          <span id="loginVersion">v1.0.2</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
         </div>
       </div>
     </div>
 
-    <!-- PANTALLA MENU -->
+    <!-- ==================== MENU ==================== -->
     <div class="screen hidden" id="screenMenu">
       <div class="app-header">
         <h1>📋 Diagnostico Social</h1>
@@ -63,7 +63,9 @@
         </div>
         <div class="status-item"><span id="statusPendientes">🔴 0 pendientes</span></div>
       </div>
-      <div class="screen active" style="padding:var(--spacing-md);">
+
+      <!-- CONTENIDO DEL MENU - ESTRUCTURA CORREGIDA -->
+      <div class="menu-content">
         <div class="menu-stats">
           <div class="stat-card warning">
             <div class="stat-value" id="statPendientes">0</div>
@@ -82,8 +84,16 @@
             <div class="stat-label">Vecinos en DB</div>
           </div>
         </div>
-        <div class="alert alert-info" id="alertSync"><span>📡</span><span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span></div>
-        <div class="alert alert-info" id="alertVecinos"><span>📊</span><span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span></div>
+
+        <div class="alert alert-info" id="alertSync">
+          <span>📡</span>
+          <span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span>
+        </div>
+        <div class="alert alert-info" id="alertVecinos">
+          <span>📊</span>
+          <span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span>
+        </div>
+
         <div class="menu-grid">
           <div class="menu-item" onclick="app.abrirFormulario('adultos')">
             <span class="menu-item-icon">👴</span>
@@ -101,25 +111,30 @@
             <div class="menu-item-desc">Seguimiento</div>
           </div>
           <div class="menu-item" onclick="app.abrirConfiguracion()">
-            <span class="menu-icon">⚙️</span>
+            <span class="menu-item-icon">⚙️</span>
             <div class="menu-item-title">Configuracion</div>
             <div class="menu-item-desc">Datos geograficos</div>
           </div>
         </div>
+
         <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
-          <button class="btn btn-secondary" onclick="app.sincronizarManual()"><span class="btn-icon">🔄</span> Sincronizar ahora</button>
-          <button class="btn btn-outline" onclick="app.cerrarSesion()"><span class="btn-icon">🚪</span> Cerrar sesion</button>
+          <button class="btn btn-secondary" onclick="app.sincronizarManual()">
+            <span class="btn-icon">🔄</span> Sincronizar ahora
+          </button>
+          <button class="btn btn-outline" onclick="app.cerrarSesion()">
+            <span class="btn-icon">🚪</span> Cerrar sesion
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- PANTALLA CONFIGURACION -->
+    <!-- ==================== CONFIGURACION ==================== -->
     <div class="screen hidden" id="screenConfig">
       <div class="app-header">
         <h1>⚙️ Configuracion</h1>
         <p class="subtitle">Datos geograficos del area</p>
       </div>
-      <div class="screen active">
+      <div class="screen-content">
         <div class="card">
           <div class="card-title">Ubicacion del trabajo</div>
           <div class="card-subtitle">Estos datos se autocompletaran en cada encuesta. Puede editarlos si cambia de sector.</div>
@@ -155,7 +170,7 @@
       </div>
     </div>
 
-    <!-- PANTALLA ADULTOS MAYORES -->
+    <!-- ==================== ADULTOS MAYORES ==================== -->
     <div class="screen hidden" id="screenAdultos">
       <div class="app-header">
         <h1>👴 Adultos Mayores</h1>
@@ -169,11 +184,11 @@
         </div>
         <div class="status-item" id="adultosPaso">Paso 1 de 3</div>
       </div>
-      <div class="screen active">
+      <div class="screen-content">
         <div class="progress-bar"><div class="progress-fill" id="progressAdultos" style="width:33%"></div></div>
         <p class="progress-text" id="progressTextAdultos">Paso 1 de 3: Datos personales</p>
 
-        <!-- PASO 1 -->
+        <!-- PASO 1: DATOS PERSONALES -->
         <div id="pasoAdultos1">
           <div class="card">
             <div class="card-title">🔍 Busqueda por Cedula</div>
@@ -193,6 +208,15 @@
             <div class="form-group">
               <label class="form-label">Apellido <span class="required">*</span></label>
               <input type="text" class="form-input" id="amApellido" placeholder="Apellido del encuestado">
+            </div>
+            <!-- NUEVO: Fecha de Nacimiento y Edad automatica -->
+            <div class="form-group">
+              <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
+              <input type="date" class="form-input" id="amFechaNacimiento" onchange="app.calcularEdad('am')">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Edad (calculada automaticamente)</label>
+              <input type="number" class="form-input" id="amEdad" placeholder="Edad" readonly style="background:#f5f5f5;">
             </div>
             <div class="form-group">
               <label class="form-label">Telefono</label>
@@ -221,7 +245,7 @@
           </div>
         </div>
 
-        <!-- PASO 2 -->
+        <!-- PASO 2: SELECCION DE SECCION -->
         <div id="pasoAdultos2" class="hidden">
           <div class="card">
             <div class="card-title">📋 Seleccione el tipo de registro</div>
@@ -249,7 +273,7 @@
           </div>
         </div>
 
-        <!-- PASO 3A -->
+        <!-- PASO 3A: VERIFICACION -->
         <div id="pasoAdultos3A" class="hidden">
           <div class="card">
             <div class="card-title">✅ Seccion A - Verificacion</div>
@@ -307,7 +331,7 @@
           </div>
         </div>
 
-        <!-- PASO 3B -->
+        <!-- PASO 3B: REGISTRO NUEVO -->
         <div id="pasoAdultos3B" class="hidden">
           <div class="card">
             <div class="card-title">📝 Seccion B - Registro Nuevo</div>
@@ -442,7 +466,7 @@
       </div>
     </div>
 
-    <!-- PANTALLA NNA -->
+    <!-- ==================== NNA ==================== -->
     <div class="screen hidden" id="screenNNA">
       <div class="app-header">
         <h1>👦 NNA No Escolarizados</h1>
@@ -456,11 +480,11 @@
         </div>
         <div class="status-item" id="nnaPaso">Paso 1 de 2</div>
       </div>
-      <div class="screen active">
+      <div class="screen-content">
         <div class="progress-bar"><div class="progress-fill" id="progressNNA" style="width:50%"></div></div>
         <p class="progress-text" id="progressTextNNA">Paso 1 de 2: Datos personales</p>
 
-        <!-- PASO 1 -->
+        <!-- PASO 1: DATOS PERSONALES -->
         <div id="pasoNNA1">
           <div class="card">
             <div class="card-title">🔍 Busqueda por Cedula (Representante)</div>
@@ -492,9 +516,14 @@
               <label class="form-label">Nombre y Apellido del NNA <span class="required">*</span></label>
               <input type="text" class="form-input" id="nnaNombre" placeholder="Nombre completo del nino/a">
             </div>
+            <!-- NUEVO: Fecha de Nacimiento y Edad automatica -->
             <div class="form-group">
-              <label class="form-label">Edad <span class="required">*</span></label>
-              <input type="number" class="form-input" id="nnaEdad" placeholder="Edad en anos" inputmode="numeric" min="0" max="18">
+              <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
+              <input type="date" class="form-input" id="nnaFechaNacimiento" onchange="app.calcularEdad('nna')">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Edad (calculada automaticamente)</label>
+              <input type="number" class="form-input" id="nnaEdad" placeholder="Edad" readonly style="background:#f5f5f5;">
             </div>
             <div class="form-group">
               <label class="form-label">Sexo <span class="required">*</span></label>
@@ -510,7 +539,7 @@
           </div>
         </div>
 
-        <!-- PASO 2 -->
+        <!-- PASO 2: ESCOLARIZACION -->
         <div id="pasoNNA2" class="hidden">
           <div class="card">
             <div class="card-title">📋 Situacion de Escolarizacion</div>
@@ -614,13 +643,13 @@
       </div>
     </div>
 
-    <!-- PANTALLA SEGUIMIENTO -->
+    <!-- ==================== SEGUIMIENTO ==================== -->
     <div class="screen hidden" id="screenSeguimiento">
       <div class="app-header">
         <h1>📋 Mis Casos</h1>
         <p class="subtitle">Seguimiento de encuestas</p>
       </div>
-      <div class="screen active" style="padding:var(--spacing-md);">
+      <div class="screen-content" style="padding:var(--spacing-md);">
         <div class="card">
           <div class="card-title">Filtros</div>
           <div class="form-group">
@@ -644,19 +673,19 @@
         <div id="listaCasos" style="margin-top:var(--spacing-md);">
           <div class="alert alert-info"><span>📋</span><span>No hay casos registrados</span></div>
         </div>
-      </div>
-      <div class="btn-group" style="padding:var(--spacing-md);">
-        <button class="btn btn-secondary" onclick="app.volverMenu()">← Volver al menu</button>
+        <div class="btn-group" style="margin-top:var(--spacing-lg);">
+          <button class="btn btn-secondary" onclick="app.volverMenu()">← Volver al menu</button>
+        </div>
       </div>
     </div>
 
-    <!-- PANTALLA EDITAR CASO -->
+    <!-- ==================== EDITAR CASO ==================== -->
     <div class="screen hidden" id="screenEditarCaso">
       <div class="app-header">
         <h1>✏️ Editar Caso</h1>
         <p class="subtitle" id="editarCasoSubtitle">Actualizar seguimiento</p>
       </div>
-      <div class="screen active">
+      <div class="screen-content">
         <div class="card">
           <div class="card-title">Informacion del caso</div>
           <div id="editarCasoInfo"></div>
