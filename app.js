@@ -8,7 +8,7 @@ const CONFIG = {
   VERSION: '1.0.0',
   DB_NAME: 'DiagSocialDB',
   DB_VERSION: 1,
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzLs9lJnuRauQIdiFitSrkQ_EFMHR8KcPkSzAabSVviANkvuffCG91cmRgFuNo3wmLE/exec'
+  SCRIPT_URL: '', // Se configura desde configuracion
   TOKEN_SEGURIDAD: 'diag-social-2024', // Cambiar en produccion
   GPS_TIMEOUT: 30000, // 30 segundos
   BORRADOR_INTERVAL: 30000, // 30 segundos
