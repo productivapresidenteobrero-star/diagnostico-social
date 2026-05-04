@@ -1,13 +1,12 @@
 // ============================================
 // DIAGNOSTICO SOCIAL COMUNITARIO - APP.JS
-// PWA Offline-First para trabajo de campo
-// Version: 1.0.2
+// Version: 1.0.5
 // ============================================
 
 const CONFIG = {
-  VERSION: '1.0.2',
+  VERSION: '1.0.5',
   DB_NAME: 'DiagSocialDB',
-  DB_VERSION: 4,  // Incrementado para nueva estructura
+  DB_VERSION: 5,
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzLs9lJnuRauQIdiFitSrkQ_EFMHR8KcPkSzAabSVviANkvuffCG91cmRgFuNo3wmLE/exec',
   TOKEN_SEGURIDAD: 'diag-social-2024',
   GPS_TIMEOUT: 30000,
@@ -15,10 +14,6 @@ const CONFIG = {
   MIN_CEDULA_DIGITOS: 6,
   MAX_VECINOS: 1000
 };
-
-// ============================================
-// CLASE PRINCIPAL
-// ============================================
 
 class DiagSocialApp {
   constructor() {
@@ -34,10 +29,6 @@ class DiagSocialApp {
     this.casoEditando = null;
   }
 
-  // ============================================
-  // INICIALIZACION
-  // ============================================
-
   async init() {
     try {
       await this.inicializarIndexedDB();
@@ -51,7 +42,6 @@ class DiagSocialApp {
       this.iniciarAutoGuardado();
       console.log('[App] Inicializacion completada v' + CONFIG.VERSION);
 
-      // Forzar sincronizacion de encuestadores al iniciar si hay conexion
       if (navigator.onLine && CONFIG.SCRIPT_URL) {
         setTimeout(() => this.sincronizarEncuestadores(), 2000);
       }
@@ -61,23 +51,13 @@ class DiagSocialApp {
     }
   }
 
-  // ============================================
-  // INDEXEDDB
-  // ============================================
-
   inicializarIndexedDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
-
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
-
+      request.onsuccess = () => { this.db = request.result; resolve(); };
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-
         if (!db.objectStoreNames.contains('encuestas')) {
           const store = db.createObjectStore('encuestas', { keyPath: 'id' });
           store.createIndex('tipo', 'tipo', { unique: false });
@@ -86,27 +66,14 @@ class DiagSocialApp {
           store.createIndex('fecha', 'fecha', { unique: false });
           store.createIndex('estadoCaso', 'estadoCaso', { unique: false });
         }
-
         if (!db.objectStoreNames.contains('vecinos')) {
           const store = db.createObjectStore('vecinos', { keyPath: 'Cedula' });
           store.createIndex('nombre', 'Nombre_y_Apellido', { unique: false });
         }
-
-        if (!db.objectStoreNames.contains('encuestadores')) {
-          db.createObjectStore('encuestadores', { keyPath: 'id' });
-        }
-
-        if (!db.objectStoreNames.contains('configuracion')) {
-          db.createObjectStore('configuracion', { keyPath: 'clave' });
-        }
-
-        if (!db.objectStoreNames.contains('session')) {
-          db.createObjectStore('session', { keyPath: 'id' });
-        }
-
-        if (!db.objectStoreNames.contains('metadatos')) {
-          db.createObjectStore('metadatos', { keyPath: 'clave' });
-        }
+        if (!db.objectStoreNames.contains('encuestadores')) db.createObjectStore('encuestadores', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('configuracion')) db.createObjectStore('configuracion', { keyPath: 'clave' });
+        if (!db.objectStoreNames.contains('session')) db.createObjectStore('session', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('metadatos')) db.createObjectStore('metadatos', { keyPath: 'clave' });
       };
     });
   }
@@ -116,7 +83,6 @@ class DiagSocialApp {
       const transaction = this.db.transaction(storeName, mode);
       const store = transaction.objectStore(storeName);
       const request = operation(store);
-
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -129,31 +95,25 @@ class DiagSocialApp {
   async cargarSession() {
     try {
       const session = await this.dbOperation('session', 'readonly', store => store.get('current'));
-      if (session && session.recordar) {
-        this.session = session;
-      }
-    } catch (e) {
-      console.log('[Session] No hay sesion guardada');
-    }
+      if (session && session.recordar) this.session = session;
+    } catch (e) { console.log('[Session] No hay sesion guardada'); }
   }
 
   async cargarEncuestadores() {
     try {
       const data = await this.dbOperation('encuestadores', 'readonly', store => store.getAll());
-      this.encuestadores = data.length > 0 ? data : this.getEncuestadoresDefault();
+      this.encuestadores = data.length > 0 ? data : [];
       this.actualizarSelectEncuestadores();
     } catch (e) {
-      this.encuestadores = this.getEncuestadoresDefault();
+      this.encuestadores = [];
       this.actualizarSelectEncuestadores();
     }
   }
 
   getEncuestadoresDefault() {
-    // Arranca vacio - debe sincronizar con Google Sheet o agregar manualmente
     return [];
   }
 
-  // Agregar encuestador manualmente (modo offline sin sincronizacion)
   agregarEncuestadorManual() {
     const nombre = prompt('Nombre completo del encuestador:');
     if (!nombre) return;
@@ -185,13 +145,11 @@ class DiagSocialApp {
       });
     }
 
-    // Opcion para agregar manualmente
     const manualOption = document.createElement('option');
     manualOption.value = '__manual__';
     manualOption.textContent = '➕ Agregar encuestador manual...';
     select.appendChild(manualOption);
 
-    // Listener para detectar seleccion de "agregar manual"
     select.onchange = (e) => {
       if (e.target.value === '__manual__') {
         this.agregarEncuestadorManual();
@@ -243,11 +201,8 @@ class DiagSocialApp {
   // ============================================
 
   mostrarPantallaInicial() {
-    if (this.session && this.session.recordar) {
-      this.mostrarMenu();
-    } else {
-      this.mostrarPantalla('screenLogin');
-    }
+    if (this.session && this.session.recordar) this.mostrarMenu();
+    else this.mostrarPantalla('screenLogin');
   }
 
   mostrarPantalla(pantallaId) {
@@ -284,9 +239,7 @@ class DiagSocialApp {
         this.configGeo = config;
         this.llenarConfiguracion();
       }
-    } catch (e) {
-      console.log('[Config] No hay configuracion guardada');
-    }
+    } catch (e) { console.log('[Config] No hay configuracion guardada'); }
   }
 
   llenarConfiguracion() {
@@ -378,7 +331,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // CALCULAR EDAD AUTOMATICAMENTE
+  // CALCULAR EDAD AUTOMATICA
   // ============================================
 
   calcularEdad(tipo) {
@@ -399,12 +352,10 @@ class DiagSocialApp {
     let edad = hoy.getFullYear() - nacimiento.getFullYear();
     const mes = hoy.getMonth() - nacimiento.getMonth();
 
-    // Ajustar si aun no ha cumplido anos este ano
     if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
       edad--;
     }
 
-    // Validar que la edad sea razonable
     if (edad < 0 || edad > 120) {
       edadInput.value = '';
       this.mostrarToast('Verifique la fecha de nacimiento', 'warning');
@@ -413,11 +364,9 @@ class DiagSocialApp {
 
     edadInput.value = edad;
 
-    // Para NNA, validar que sea menor de 18
     if (tipo === 'nna' && edad >= 18) {
       this.mostrarToast('El NNA debe ser menor de 18 anos', 'warning');
     }
-    // Para adultos mayores, validar que sea 60+
     if (tipo === 'am' && edad < 60) {
       this.mostrarToast('El adulto mayor debe tener 60+ anos', 'warning');
     }
@@ -433,9 +382,7 @@ class DiagSocialApp {
       this.baseVecinos = vecinos;
       const fecha = await this.dbOperation('metadatos', 'readonly', store => store.get('vecinos_fecha'));
       this.actualizarIndicadorVecinos(vecinos.length, fecha ? fecha.valor : null);
-    } catch (e) {
-      console.log('[Vecinos] Error cargando:', e);
-    }
+    } catch (e) { console.log('[Vecinos] Error cargando:', e); }
   }
 
   actualizarIndicadorVecinos(cantidad, fecha) {
@@ -445,9 +392,7 @@ class DiagSocialApp {
 
     if (el) el.textContent = `Base vecinos: ${cantidad} registros`;
     if (elMenu) elMenu.textContent = cantidad;
-    if (elFecha) {
-      elFecha.textContent = fecha ? this.formatearFecha(fecha) : 'Sin datos';
-    }
+    if (elFecha) elFecha.textContent = fecha ? this.formatearFecha(fecha) : 'Sin datos';
   }
 
   buscarVecino(tipo) {
@@ -462,9 +407,7 @@ class DiagSocialApp {
     }
 
     let vecino = this.baseVecinos.find(v => v.Cedula === cedula);
-    if (!vecino) {
-      vecino = this.baseVecinos.find(v => v.Cedula && v.Cedula.includes(cedula));
-    }
+    if (!vecino) vecino = this.baseVecinos.find(v => v.Cedula && v.Cedula.includes(cedula));
 
     if (vecino) {
       this.autocompletarCampos(tipo, vecino);
@@ -504,7 +447,6 @@ class DiagSocialApp {
         }
       });
 
-      // Autocompletar fecha de nacimiento si existe
       if (vecino.Fecha_Nacimiento) {
         const fechaEl = document.getElementById('amFechaNacimiento');
         if (fechaEl) {
@@ -734,9 +676,7 @@ class DiagSocialApp {
 
   toggleEscolarizacion(escolarizado) {
     const detalle = document.getElementById('nnaEscolarizacionDetalle');
-    if (detalle) {
-      detalle.classList.toggle('hidden', !escolarizado);
-    }
+    if (detalle) detalle.classList.toggle('hidden', !escolarizado);
   }
 
   // ============================================
@@ -746,11 +686,7 @@ class DiagSocialApp {
   selectOption(btn) {
     const name = btn.dataset.name;
     const value = btn.dataset.value;
-
-    document.querySelectorAll(`[data-name="${name}"]`).forEach(b => {
-      b.classList.remove('selected-yes', 'selected-no');
-    });
-
+    document.querySelectorAll(`[data-name="${name}"]`).forEach(b => b.classList.remove('selected-yes', 'selected-no'));
     btn.classList.add(value === 'SI' ? 'selected-yes' : 'selected-no');
   }
 
@@ -759,7 +695,6 @@ class DiagSocialApp {
       r.checked = false;
       r.closest('.radio-item')?.classList.remove('selected');
     });
-
     const radio = item.querySelector('input[type="radio"]');
     radio.checked = true;
     item.classList.add('selected');
@@ -774,9 +709,7 @@ class DiagSocialApp {
   toggleOtro(campoId) {
     const checkbox = event.target;
     const campo = document.getElementById(campoId);
-    if (campo) {
-      campo.classList.toggle('hidden', !checkbox.checked);
-    }
+    if (campo) campo.classList.toggle('hidden', !checkbox.checked);
   }
 
   // ============================================
@@ -787,7 +720,6 @@ class DiagSocialApp {
     const id = this.generarId();
     const fechaHora = new Date().toISOString();
     const datos = this.recolectarDatos(tipo, seccion);
-
     if (!datos) return;
 
     const encuesta = {
@@ -960,64 +892,16 @@ class DiagSocialApp {
   // SINCRONIZACION
   // ============================================
 
-  
-  // ============================================
-  // SINCRONIZAR ENCUESTADORES DESDE GOOGLE SHEET
-  // ============================================
-
-  async sincronizarEncuestadores() {
-    if (!CONFIG.SCRIPT_URL) {
-      console.log('[Sync] URL del script no configurada');
-      return;
-    }
-
-    try {
-      this.mostrarLoading('Sincronizando encuestadores...');
-      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getEncuestadores&token=${CONFIG.TOKEN_SEGURIDAD}`);
-
-      if (!response.ok) throw new Error('Error al descargar encuestadores');
-
-      const data = await response.json();
-      if (data.success && data.encuestadores && data.encuestadores.length > 0) {
-        // Limpiar encuestadores locales
-        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
-
-        // Guardar nuevos encuestadores
-        for (const enc of data.encuestadores) {
-          await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
-        }
-
-        this.encuestadores = data.encuestadores;
-        this.actualizarSelectEncuestadores();
-        this.mostrarToast(`${data.encuestadores.length} encuestadores sincronizados`, 'success');
-        console.log(`[Sync] ${data.encuestadores.length} encuestadores descargados`);
-      } else {
-        console.log('[Sync] No hay encuestadores en el servidor');
-      }
-    } catch (e) {
-      console.error('[Sync] Error descargando encuestadores:', e);
-      this.mostrarToast('No se pudieron sincronizar encuestadores. Modo offline.', 'warning');
-    } finally {
-      this.ocultarLoading();
-    }
-  }
-
   detectarConexion() {
     const updateStatus = () => {
       const online = navigator.onLine;
       const indicator = document.getElementById('statusOnline');
       const text = document.getElementById('statusText');
 
-      if (indicator) {
-        indicator.className = online ? 'status-indicator online' : 'status-indicator offline';
-      }
-      if (text) {
-        text.textContent = online ? 'Conectado' : 'Sin conexion';
-      }
+      if (indicator) indicator.className = online ? 'status-indicator online' : 'status-indicator offline';
+      if (text) text.textContent = online ? 'Conectado' : 'Sin conexion';
 
-      if (online) {
-        this.sincronizarAutomatica();
-      }
+      if (online) this.sincronizarAutomatica();
     };
 
     window.addEventListener('online', updateStatus);
@@ -1052,6 +936,41 @@ class DiagSocialApp {
       return;
     }
     await this.sincronizarAutomatica();
+  }
+
+  async sincronizarEncuestadores() {
+    if (!CONFIG.SCRIPT_URL) {
+      console.log('[Sync] URL del script no configurada');
+      return;
+    }
+
+    try {
+      this.mostrarLoading('Sincronizando encuestadores...');
+      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getEncuestadores&token=${CONFIG.TOKEN_SEGURIDAD}`);
+
+      if (!response.ok) throw new Error('Error al descargar encuestadores');
+
+      const data = await response.json();
+      if (data.success && data.encuestadores && data.encuestadores.length > 0) {
+        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
+
+        for (const enc of data.encuestadores) {
+          await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
+        }
+
+        this.encuestadores = data.encuestadores;
+        this.actualizarSelectEncuestadores();
+        this.mostrarToast(`${data.encuestadores.length} encuestadores sincronizados`, 'success');
+        console.log(`[Sync] ${data.encuestadores.length} encuestadores descargados`);
+      } else {
+        console.log('[Sync] No hay encuestadores en el servidor');
+      }
+    } catch (e) {
+      console.error('[Sync] Error descargando encuestadores:', e);
+      this.mostrarToast('No se pudieron sincronizar encuestadores. Modo offline.', 'warning');
+    } finally {
+      this.ocultarLoading();
+    }
   }
 
   async descargarBaseVecinos() {
@@ -1342,14 +1261,6 @@ class DiagSocialApp {
   }
 }
 
-// ============================================
-// INICIALIZACION
-// ============================================
-
 const app = new DiagSocialApp();
-
-document.addEventListener('DOMContentLoaded', () => {
-  app.init();
-});
-
+document.addEventListener('DOMContentLoaded', () => { app.init(); });
 window.app = app;
