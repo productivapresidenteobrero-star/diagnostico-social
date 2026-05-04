@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1976d2">
+  <meta name="description" content="Aplicacion para diagnostico social comunitario - 100% offline">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Diagnostico Social Comunitario</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <div class="toast-container" id="toastContainer"></div>
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="spinner"></div>
+      <p class="loading-text" id="loadingText">Cargando...</p>
+    </div>
+
+    <!-- PANTALLA LOGIN -->
+    <div class="login-screen" id="screenLogin">
+      <div class="login-card">
+        <div class="login-logo">📋</div>
+        <h1 class="login-title">Diagnostico Social</h1>
+        <p class="login-subtitle">Comunitario - 100% Offline</p>
+        <div class="form-group">
+          <label class="form-label">Encuestador</label>
+          <select class="form-select" id="loginNombre"><option value="">-- Seleccione su nombre --</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">PIN (4 digitos)</label>
+          <input type="password" class="form-input" id="loginPin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="****" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="checkbox-item" style="border:none; padding-left:0;">
+            <input type="checkbox" id="loginRecordar">
+            <label for="loginRecordar">Recordar mi sesion</label>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btnLogin" onclick="app.login()">
+          <span class="btn-icon">🔐</span> Iniciar Sesion
+        </button>
+        <div class="form-hint" style="text-align:center; margin-top:var(--spacing-md);">
+          <span id="loginVersion">v1.0.0</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANTALLA MENU -->
+    <div class="screen hidden" id="screenMenu">
+      <div class="app-header">
+        <h1>📋 Diagnostico Social</h1>
+        <p class="subtitle" id="menuEncuestador">Bienvenido</p>
+      </div>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-indicator offline" id="statusOnline"></span>
+          <span id="statusText">Sin conexion</span>
+        </div>
+        <div class="status-item"><span id="statusPendientes">🔴 0 pendientes</span></div>
+      </div>
+      <div class="screen active" style="padding:var(--spacing-md);">
+        <div class="menu-stats">
+          <div class="stat-card warning">
+            <div class="stat-value" id="statPendientes">0</div>
+            <div class="stat-label">Pendientes sync</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-value" id="statSincronizadas">0</div>
+            <div class="stat-label">Sincronizadas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">Total encuestas</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statVecinos">0</div>
+            <div class="stat-label">Vecinos en DB</div>
+          </div>
+        </div>
+        <div class="alert alert-info" id="alertSync"><span>📡</span><span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span></div>
+        <div class="alert alert-info" id="alertVecinos"><span>📊</span><span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span></div>
+        <div class="menu-grid">
+          <div class="menu-item" onclick="app.abrirFormulario('adultos')">
+            <span class="menu-item-icon">👴</span>
+            <div class="menu-item-title">Adultos Mayores</div>
+            <div class="menu-item-desc">Verificacion y registro</div>
+          </div>
+          <div class="menu-item" onclick="app.abrirFormulario('nna')">
+            <span class="menu-item-icon">👦</span>
+            <div class="menu-item-title">NNA</div>
+            <div class="menu-item-desc">No escolarizados</div>
+          </div>
+          <div class="menu-item" onclick="app.abrirSeguimiento()">
+            <span class="menu-item-icon">📋</span>
+            <div class="menu-item-title">Mis Casos</div>
+            <div class="menu-item-desc">Seguimiento</div>
+          </div>
+          <div class="menu-item" onclick="app.abrirConfiguracion()">
+            <span class="menu-icon">⚙️</span>
+            <div class="menu-item-title">Configuracion</div>
+            <div class="menu-item-desc">Datos geograficos</div>
+          </div>
+        </div>
+        <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
+          <button class="btn btn-secondary" onclick="app.sincronizarManual()"><span class="btn-icon">🔄</span> Sincronizar ahora</button>
+          <button class="btn btn-outline" onclick="app.cerrarSesion()"><span class="btn-icon">🚪</span> Cerrar sesion</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANTALLA CONFIGURACION -->
+    <div class="screen hidden" id="screenConfig">
+      <div class="app-header">
+        <h1>⚙️ Configuracion</h1>
+        <p class="subtitle">Datos geograficos del area</p>
+      </div>
+      <div class="screen active">
+        <div class="card">
+          <div class="card-title">Ubicacion del trabajo</div>
+          <div class="card-subtitle">Estos datos se autocompletaran en cada encuesta. Puede editarlos si cambia de sector.</div>
+          <div class="form-group">
+            <label class="form-label">Estado <span class="required">*</span></label>
+            <input type="text" class="form-input" id="cfgEstado" placeholder="Ej: Miranda">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Municipio <span class="required">*</span></label>
+            <input type="text" class="form-input" id="cfgMunicipio" placeholder="Ej: Sucre">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Parroquia <span class="required">*</span></label>
+            <input type="text" class="form-input" id="cfgParroquia" placeholder="Ej: Petare">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Circuito Comunal / Comuna</label>
+            <input type="text" class="form-input" id="cfgCircuito" placeholder="Ej: Comuna Socialista El Llanito">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Consejo Comunal <span class="required">*</span></label>
+            <input type="text" class="form-input" id="cfgConsejo" placeholder="Ej: Consejo Comunal La Esperanza">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Calle / Avenida <span class="required">*</span></label>
+            <input type="text" class="form-input" id="cfgCalle" placeholder="Ej: Av. Principal de La Vega">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
+          <button class="btn btn-primary" onclick="app.guardarConfiguracion()">💾 Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANTALLA ADULTOS MAYORES -->
+    <div class="screen hidden" id="screenAdultos">
+      <div class="app-header">
+        <h1>👴 Adultos Mayores</h1>
+        <p class="subtitle" id="adultosSubtitle">Datos personales</p>
+      </div>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="gps-indicator obtaining" id="gpsAdultos">
+            <span class="status-indicator syncing"></span> Obteniendo GPS...
+          </span>
+        </div>
+        <div class="status-item" id="adultosPaso">Paso 1 de 3</div>
+      </div>
+      <div class="screen active">
+        <div class="progress-bar"><div class="progress-fill" id="progressAdultos" style="width:33%"></div></div>
+        <p class="progress-text" id="progressTextAdultos">Paso 1 de 3: Datos personales</p>
+
+        <!-- PASO 1 -->
+        <div id="pasoAdultos1">
+          <div class="card">
+            <div class="card-title">🔍 Busqueda por Cedula</div>
+            <div class="form-group">
+              <label class="form-label">Cedula de identidad <span class="required">*</span></label>
+              <input type="number" class="form-input" id="amCedula" placeholder="Ingrese numero de cedula" inputmode="numeric" oninput="app.buscarVecino('am')">
+              <p class="form-hint">Escriba al menos 6 digitos para buscar</p>
+            </div>
+            <div id="amBusquedaResultado"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">👤 Datos Personales</div>
+            <div class="form-group">
+              <label class="form-label">Nombre <span class="required">*</span></label>
+              <input type="text" class="form-input" id="amNombre" placeholder="Nombre del encuestado">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Apellido <span class="required">*</span></label>
+              <input type="text" class="form-input" id="amApellido" placeholder="Apellido del encuestado">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telefono</label>
+              <input type="tel" class="form-input" id="amTelefono" placeholder="Ej: 0412-1234567">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sector</label>
+              <input type="text" class="form-input" id="amSector" placeholder="Sector donde reside">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Calle o Avenida</label>
+              <input type="text" class="form-input" id="amCalle" placeholder="Calle o avenida">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nro. de Casa</label>
+              <input type="text" class="form-input" id="amNroCasa" placeholder="Numero de casa">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Referencia</label>
+              <input type="text" class="form-input" id="amReferencia" placeholder="Punto de referencia cercano">
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
+            <button class="btn btn-primary" onclick="app.adultosSiguiente(2)">Siguiente →</button>
+          </div>
+        </div>
+
+        <!-- PASO 2 -->
+        <div id="pasoAdultos2" class="hidden">
+          <div class="card">
+            <div class="card-title">📋 Seleccione el tipo de registro</div>
+            <div class="card-subtitle">Elija la seccion segun si el adulto mayor ya esta en el listado previo</div>
+            <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
+              <button class="btn btn-primary btn-lg" onclick="app.seleccionarSeccionAdultos('A')" style="text-align:left; justify-content:flex-start;">
+                <span class="btn-icon">✅</span>
+                <div style="text-align:left;">
+                  <div style="font-weight:700;">Seccion A - Verificacion</div>
+                  <div style="font-size:0.85rem; font-weight:400; opacity:0.9;">Ya esta en listado previo de vulnerabilidad</div>
+                </div>
+              </button>
+              <button class="btn btn-outline btn-lg" onclick="app.seleccionarSeccionAdultos('B')" style="text-align:left; justify-content:flex-start;">
+                <span class="btn-icon">📝</span>
+                <div style="text-align:left;">
+                  <div style="font-weight:700;">Seccion B - Registro Nuevo</div>
+                  <div style="font-size:0.85rem; font-weight:400; opacity:0.9;">NO esta en el listado previo</div>
+                </div>
+              </button>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.adultosAnterior(1)">← Anterior</button>
+            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Guardar borrador</button>
+          </div>
+        </div>
+
+        <!-- PASO 3A -->
+        <div id="pasoAdultos3A" class="hidden">
+          <div class="card">
+            <div class="card-title">✅ Seccion A - Verificacion</div>
+            <div class="card-subtitle">Adulto mayor YA en listado de vulnerabilidad</div>
+            <div class="form-section">
+              <div class="form-group">
+                <label class="form-label">1. Actualmente usted vive solo/a?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="amViveSolo" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="amViveSolo" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">2. Es sosten de hogar?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="amSosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="amSosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">3. Los ingresos familiares actuales le permiten cubrir sus necesidades basicas?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="amIngresos" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="amIngresos" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">4. Tiene alguna condicion de salud que genere alta dependencia fisica?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">📋 Seguimiento del caso</div>
+            <div class="form-group">
+              <label class="form-label">Necesidad detectada</label>
+              <textarea class="form-textarea" id="amNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado del caso</label>
+              <select class="form-select" id="amEstadoCaso">
+                <option value="pendiente">🔴 Pendiente</option>
+                <option value="proceso">🟡 En proceso</option>
+                <option value="resuelto">🟢 Resuelto</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">← Anterior</button>
+            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Borrador</button>
+            <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'A')">✅ Guardar y finalizar</button>
+          </div>
+        </div>
+
+        <!-- PASO 3B -->
+        <div id="pasoAdultos3B" class="hidden">
+          <div class="card">
+            <div class="card-title">📝 Seccion B - Registro Nuevo</div>
+            <div class="card-subtitle">Adulto mayor NO en listado previo</div>
+            <div class="form-section">
+              <div class="section-title">1. Situacion del nucleo familiar</div>
+              <div class="form-group">
+                <label class="form-label">a) Es sosten de hogar?</label>
+                <div class="option-group">
+                  <button type="button" class="option-btn" data-name="amB_Sosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
+                  <button type="button" class="option-btn" data-name="amB_Sosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">b) Actualmente vive solo/a o comparte vivienda?</label>
+                <div class="radio-group">
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
+                    <input type="radio" name="amB_Vivienda" value="solo"><label>Vive completamente solo/a</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
+                    <input type="radio" name="amB_Vivienda" value="familiares"><label>Comparte con familiares</label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">c) Cantidad de miembros del grupo familiar</label>
+                <div class="radio-group">
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                    <input type="radio" name="amB_Miembros" value="1-3"><label>1-3 personas</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                    <input type="radio" name="amB_Miembros" value="3-5"><label>3-5 personas</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                    <input type="radio" name="amB_Miembros" value="5+"><label>Mayor a 5 personas</label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">d) Miembros del grupo que perciben ingresos</label>
+                <div class="radio-group">
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                    <input type="radio" name="amB_IngresosMiembro" value="1"><label>1</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                    <input type="radio" name="amB_IngresosMiembro" value="2"><label>2</label>
+                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                    <input type="radio" name="amB_IngresosMiembro" value="2+"><label>Mas de 2</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="section-title">2. Salud (seleccione todas las que apliquen)</div>
+              <div class="checkbox-group">
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Encamado" value="SI"><label for="amB_Encamado">Encamado/a</label>
+                </div>
+                <div style="padding-left:var(--spacing-md); font-weight:600; margin:var(--spacing-sm) 0;">Enfermedades Neurodegenerativas:</div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Parkinson" value="SI"><label for="amB_Parkinson">Parkinson</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Alzheimer" value="SI"><label for="amB_Alzheimer">Alzheimer</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Trastorno" value="SI"><label for="amB_Trastorno">Trastorno Neurocognitivo Mayor (demencia)</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_InsufRenal" value="SI"><label for="amB_InsufRenal">Insuficiencia Renal (dialisis)</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Cancer" value="SI"><label for="amB_Cancer">Cancer</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_InsufCardiaca" value="SI"><label for="amB_InsufCardiaca">Insuficiencia Cardiaca</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Artritis" value="SI"><label for="amB_Artritis">Artritis Reumatoidea</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_Esclerosis" value="SI"><label for="amB_Esclerosis">Esclerosis Multiple</label>
+                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
+                  <input type="checkbox" id="amB_SaludOtroCheck" value="SI" onchange="app.toggleOtro('amB_SaludOtro')"><label for="amB_SaludOtroCheck">Otro</label>
+                </div>
+                <div class="form-group hidden" id="amB_SaludOtro">
+                  <input type="text" class="form-input" placeholder="Especifique otra condicion">
+                </div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="section-title">3. Situacion Economica</div>
+              <div class="radio-group">
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+                  <input type="radio" name="amB_Economica" value="todo"><label>Si, alcanzan para todo lo necesario</label>
+                </div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+                  <input type="radio" name="amB_Economica" value="estricto"><label>Permiten cubrir lo estrictamente necesario</label>
+                </div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+                  <input type="radio" name="amB_Economica" value="no_basico"><label>No alcanzan para cubrir lo basico</label>
+                </div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+                  <input type="radio" name="amB_Economica" value="dependencia"><label>Depende totalmente de ayuda externa</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">📋 Seguimiento del caso</div>
+            <div class="form-group">
+              <label class="form-label">Necesidad detectada</label>
+              <textarea class="form-textarea" id="amBNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado del caso</label>
+              <select class="form-select" id="amBEstadoCaso">
+                <option value="pendiente">🔴 Pendiente</option>
+                <option value="proceso">🟡 En proceso</option>
+                <option value="resuelto">🟢 Resuelto</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">← Anterior</button>
+            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Borrador</button>
+            <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'B')">✅ Guardar y finalizar</button>
+          </div>
+        </div>
+      </div>
+    </div>
