@@ -1,21 +1,22 @@
-// Service Worker - Diagnóstico Social Comunitario
-// Versión: 1.0.0
+// Service Worker - Diagnostico Social Comunitario
+// Version: 1.0.1
 
 const CACHE_NAME = 'diagsocial-v1';
+const BASE_PATH = '/diagnostico-social';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json'
+  BASE_PATH + '/',
+  BASE_PATH + '/index.html',
+  BASE_PATH + '/styles.css',
+  BASE_PATH + '/app.js',
+  BASE_PATH + '/manifest.json'
 ];
 
-// Instalación: cachear recursos estáticos
+// Instalacion: cachear recursos estaticos
 self.addEventListener('install', (event) => {
   console.log('[SW] Instalando Service Worker...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Cacheando recursos estáticos...');
+      console.log('[SW] Cacheando recursos estaticos...');
       return cache.addAll(STATIC_ASSETS);
     }).then(() => {
       return self.skipWaiting();
@@ -23,7 +24,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activación: limpiar caches antiguas
+// Activacion: limpiar caches antiguas
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activando Service Worker...');
   event.waitUntil(
@@ -42,17 +43,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: estrategia Cache-First para recursos estáticos, Network-First para API
+// Fetch: estrategia Cache-First para recursos estaticos
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // No interceptar peticiones a Google Apps Script (dejar que pasen normal)
+  // No interceptar peticiones a Google Apps Script
   if (url.href.includes('script.google.com')) {
     return;
   }
 
-  // Para recursos estáticos: Cache-First
+  // Para recursos estaticos: Cache-First
   if (request.mode === 'navigate' || 
       request.destination === 'style' || 
       request.destination === 'script' ||
@@ -72,9 +73,9 @@ self.addEventListener('fetch', (event) => {
           });
           return networkResponse;
         }).catch(() => {
-          // Si falla la red y no hay cache, mostrar página offline
+          // Si falla la red y no hay cache, mostrar pagina offline
           if (request.mode === 'navigate') {
-            return caches.match('/index.html');
+            return caches.match(BASE_PATH + '/index.html');
           }
         });
       })
@@ -82,10 +83,10 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// Sincronización en background (cuando vuelve la conexión)
+// Sincronizacion en background
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-encuestas') {
-    console.log('[SW] Sincronización en background activada');
+    console.log('[SW] Sincronizacion en background activada');
     event.waitUntil(
       self.clients.matchAll().then((clients) => {
         clients.forEach((client) => {
@@ -96,18 +97,18 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Notificaciones push (para sincronización completada)
+// Notificaciones push
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const options = {
-    body: data.body || 'Sincronización completada',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    body: data.body || 'Sincronizacion completada',
+    icon: BASE_PATH + '/icon-192.png',
+    badge: BASE_PATH + '/icon-192.png',
     tag: 'sync-notification',
     requireInteraction: false
   };
   event.waitUntil(
-    self.registration.showNotification('Diagnóstico Social', options)
+    self.registration.showNotification('Diagnostico Social', options)
   );
 });
 
