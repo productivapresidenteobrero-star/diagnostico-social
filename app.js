@@ -7,8 +7,8 @@
 const CONFIG = {
   VERSION: '1.0.2',
   DB_NAME: 'DiagSocialDB',
-  DB_VERSION: 2,  // Incrementado para nueva estructura
-  SCRIPT_URL: '',
+  DB_VERSION: 4,  // Incrementado para nueva estructura
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzLs9lJnuRauQIdiFitSrkQ_EFMHR8KcPkSzAabSVviANkvuffCG91cmRgFuNo3wmLE/exec',
   TOKEN_SEGURIDAD: 'diag-social-2024',
   GPS_TIMEOUT: 30000,
   BORRADOR_INTERVAL: 30000,
@@ -50,6 +50,11 @@ class DiagSocialApp {
       this.mostrarPantallaInicial();
       this.iniciarAutoGuardado();
       console.log('[App] Inicializacion completada v' + CONFIG.VERSION);
+
+      // Forzar sincronizacion de encuestadores al iniciar si hay conexion
+      if (navigator.onLine && CONFIG.SCRIPT_URL) {
+        setTimeout(() => this.sincronizarEncuestadores(), 2000);
+      }
     } catch (error) {
       console.error('[App] Error en inicializacion:', error);
       this.mostrarToast('Error al iniciar la aplicacion', 'error');
@@ -144,22 +149,55 @@ class DiagSocialApp {
   }
 
   getEncuestadoresDefault() {
-    return [
-      { id: 1, nombre: 'Maria Garcia', password: '1234', activo: true },
-      { id: 2, nombre: 'Jose Rodriguez', password: '5678', activo: true },
-      { id: 3, nombre: 'Ana Martinez', password: '9012', activo: true }
-    ];
+    // Arranca vacio - debe sincronizar con Google Sheet o agregar manualmente
+    return [];
+  }
+
+  // Agregar encuestador manualmente (modo offline sin sincronizacion)
+  agregarEncuestadorManual() {
+    const nombre = prompt('Nombre completo del encuestador:');
+    if (!nombre) return;
+    const pin = prompt('PIN de 4 digitos:');
+    if (!pin || pin.length !== 4) {
+      this.mostrarToast('PIN debe tener 4 digitos', 'error');
+      return;
+    }
+    const id = Date.now();
+    const encuestador = { id, nombre, password: pin, activo: true };
+    this.encuestadores.push(encuestador);
+    this.dbOperation('encuestadores', 'readwrite', store => store.put(encuestador));
+    this.actualizarSelectEncuestadores();
+    this.mostrarToast('Encuestador agregado', 'success');
   }
 
   actualizarSelectEncuestadores() {
     const select = document.getElementById('loginNombre');
     select.innerHTML = '<option value="">-- Seleccione su nombre --</option>';
-    this.encuestadores.filter(e => e.activo).forEach(e => {
-      const option = document.createElement('option');
-      option.value = e.id;
-      option.textContent = e.nombre;
-      select.appendChild(option);
-    });
+
+    if (this.encuestadores.length === 0) {
+      select.innerHTML += '<option value="__empty__" disabled>⚠️ Sincronice para cargar encuestadores</option>';
+    } else {
+      this.encuestadores.filter(e => e.activo).forEach(e => {
+        const option = document.createElement('option');
+        option.value = e.id;
+        option.textContent = e.nombre;
+        select.appendChild(option);
+      });
+    }
+
+    // Opcion para agregar manualmente
+    const manualOption = document.createElement('option');
+    manualOption.value = '__manual__';
+    manualOption.textContent = '➕ Agregar encuestador manual...';
+    select.appendChild(manualOption);
+
+    // Listener para detectar seleccion de "agregar manual"
+    select.onchange = (e) => {
+      if (e.target.value === '__manual__') {
+        this.agregarEncuestadorManual();
+        e.target.value = '';
+      }
+    };
   }
 
   async login() {
@@ -921,6 +959,48 @@ class DiagSocialApp {
   // ============================================
   // SINCRONIZACION
   // ============================================
+
+  
+  // ============================================
+  // SINCRONIZAR ENCUESTADORES DESDE GOOGLE SHEET
+  // ============================================
+
+  async sincronizarEncuestadores() {
+    if (!CONFIG.SCRIPT_URL) {
+      console.log('[Sync] URL del script no configurada');
+      return;
+    }
+
+    try {
+      this.mostrarLoading('Sincronizando encuestadores...');
+      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getEncuestadores&token=${CONFIG.TOKEN_SEGURIDAD}`);
+
+      if (!response.ok) throw new Error('Error al descargar encuestadores');
+
+      const data = await response.json();
+      if (data.success && data.encuestadores && data.encuestadores.length > 0) {
+        // Limpiar encuestadores locales
+        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
+
+        // Guardar nuevos encuestadores
+        for (const enc of data.encuestadores) {
+          await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
+        }
+
+        this.encuestadores = data.encuestadores;
+        this.actualizarSelectEncuestadores();
+        this.mostrarToast(`${data.encuestadores.length} encuestadores sincronizados`, 'success');
+        console.log(`[Sync] ${data.encuestadores.length} encuestadores descargados`);
+      } else {
+        console.log('[Sync] No hay encuestadores en el servidor');
+      }
+    } catch (e) {
+      console.error('[Sync] Error descargando encuestadores:', e);
+      this.mostrarToast('No se pudieron sincronizar encuestadores. Modo offline.', 'warning');
+    } finally {
+      this.ocultarLoading();
+    }
+  }
 
   detectarConexion() {
     const updateStatus = () => {

@@ -1,7 +1,7 @@
 // Service Worker - Diagnostico Social Comunitario
 // Version: 1.0.2
 
-const CACHE_NAME = 'diagsocial-v1.0.2';
+const CACHE_NAME = 'diagsocial-v1.0.4';
 const BASE_PATH = '/diagnostico-social';
 const STATIC_ASSETS = [
   BASE_PATH + '/',
@@ -13,7 +13,7 @@ const STATIC_ASSETS = [
 
 // Instalacion: cachear recursos estaticos
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando Service Worker v1.0.2...');
+  console.log('[SW] Instalando Service Worker v1.0.4...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Cacheando recursos estaticos...');
