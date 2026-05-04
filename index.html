@@ -11,7 +11,6 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
   <link rel="stylesheet" href="styles.css">
-<base target="_blank">
 </head>
 <body>
   <div class="app-container">
@@ -45,7 +44,7 @@
           <span class="btn-icon">🔐</span> Iniciar Sesion
         </button>
         <div class="form-hint" style="text-align:center; margin-top:var(--spacing-md);">
-          <span id="loginVersion">v1.0.2</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
+          <span id="loginVersion">v1.0.5</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
         </div>
       </div>
     </div>
@@ -63,8 +62,6 @@
         </div>
         <div class="status-item"><span id="statusPendientes">🔴 0 pendientes</span></div>
       </div>
-
-      <!-- CONTENIDO DEL MENU - ESTRUCTURA CORREGIDA -->
       <div class="menu-content">
         <div class="menu-stats">
           <div class="stat-card warning">
@@ -84,16 +81,8 @@
             <div class="stat-label">Vecinos en DB</div>
           </div>
         </div>
-
-        <div class="alert alert-info" id="alertSync">
-          <span>📡</span>
-          <span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span>
-        </div>
-        <div class="alert alert-info" id="alertVecinos">
-          <span>📊</span>
-          <span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span>
-        </div>
-
+        <div class="alert alert-info" id="alertSync"><span>📡</span><span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span></div>
+        <div class="alert alert-info" id="alertVecinos"><span>📊</span><span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span></div>
         <div class="menu-grid">
           <div class="menu-item" onclick="app.abrirFormulario('adultos')">
             <span class="menu-item-icon">👴</span>
@@ -116,14 +105,9 @@
             <div class="menu-item-desc">Datos geograficos</div>
           </div>
         </div>
-
         <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
-          <button class="btn btn-secondary" onclick="app.sincronizarManual()">
-            <span class="btn-icon">🔄</span> Sincronizar ahora
-          </button>
-          <button class="btn btn-outline" onclick="app.cerrarSesion()">
-            <span class="btn-icon">🚪</span> Cerrar sesion
-          </button>
+          <button class="btn btn-secondary" onclick="app.sincronizarManual()"><span class="btn-icon">🔄</span> Sincronizar ahora</button>
+          <button class="btn btn-outline" onclick="app.cerrarSesion()"><span class="btn-icon">🚪</span> Cerrar sesion</button>
         </div>
       </div>
     </div>
@@ -178,9 +162,7 @@
       </div>
       <div class="status-bar">
         <div class="status-item">
-          <span class="gps-indicator obtaining" id="gpsAdultos">
-            <span class="status-indicator syncing"></span> Obteniendo GPS...
-          </span>
+          <span class="gps-indicator obtaining" id="gpsAdultos"><span class="status-indicator syncing"></span> Obteniendo GPS...</span>
         </div>
         <div class="status-item" id="adultosPaso">Paso 1 de 3</div>
       </div>
@@ -188,7 +170,6 @@
         <div class="progress-bar"><div class="progress-fill" id="progressAdultos" style="width:33%"></div></div>
         <p class="progress-text" id="progressTextAdultos">Paso 1 de 3: Datos personales</p>
 
-        <!-- PASO 1: DATOS PERSONALES -->
         <div id="pasoAdultos1">
           <div class="card">
             <div class="card-title">🔍 Busqueda por Cedula</div>
@@ -209,7 +190,6 @@
               <label class="form-label">Apellido <span class="required">*</span></label>
               <input type="text" class="form-input" id="amApellido" placeholder="Apellido del encuestado">
             </div>
-            <!-- NUEVO: Fecha de Nacimiento y Edad automatica -->
             <div class="form-group">
               <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
               <input type="date" class="form-input" id="amFechaNacimiento" onchange="app.calcularEdad('am')">
@@ -245,7 +225,6 @@
           </div>
         </div>
 
-        <!-- PASO 2: SELECCION DE SECCION -->
         <div id="pasoAdultos2" class="hidden">
           <div class="card">
             <div class="card-title">📋 Seleccione el tipo de registro</div>
@@ -253,17 +232,11 @@
             <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
               <button class="btn btn-primary btn-lg" onclick="app.seleccionarSeccionAdultos('A')" style="text-align:left; justify-content:flex-start;">
                 <span class="btn-icon">✅</span>
-                <div style="text-align:left;">
-                  <div style="font-weight:700;">Seccion A - Verificacion</div>
-                  <div style="font-size:0.85rem; font-weight:400; opacity:0.9;">Ya esta en listado previo de vulnerabilidad</div>
-                </div>
+                <div style="text-align:left;"><div style="font-weight:700;">Seccion A - Verificacion</div><div style="font-size:0.85rem; font-weight:400; opacity:0.9;">Ya esta en listado previo de vulnerabilidad</div></div>
               </button>
               <button class="btn btn-outline btn-lg" onclick="app.seleccionarSeccionAdultos('B')" style="text-align:left; justify-content:flex-start;">
                 <span class="btn-icon">📝</span>
-                <div style="text-align:left;">
-                  <div style="font-weight:700;">Seccion B - Registro Nuevo</div>
-                  <div style="font-size:0.85rem; font-weight:400; opacity:0.9;">NO esta en el listado previo</div>
-                </div>
+                <div style="text-align:left;"><div style="font-weight:700;">Seccion B - Registro Nuevo</div><div style="font-size:0.85rem; font-weight:400; opacity:0.9;">NO esta en el listado previo</div></div>
               </button>
             </div>
           </div>
@@ -273,7 +246,6 @@
           </div>
         </div>
 
-        <!-- PASO 3A: VERIFICACION -->
         <div id="pasoAdultos3A" class="hidden">
           <div class="card">
             <div class="card-title">✅ Seccion A - Verificacion</div>
@@ -331,7 +303,6 @@
           </div>
         </div>
 
-        <!-- PASO 3B: REGISTRO NUEVO -->
         <div id="pasoAdultos3B" class="hidden">
           <div class="card">
             <div class="card-title">📝 Seccion B - Registro Nuevo</div>
@@ -348,97 +319,51 @@
               <div class="form-group">
                 <label class="form-label">b) Actualmente vive solo/a o comparte vivienda?</label>
                 <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
-                    <input type="radio" name="amB_Vivienda" value="solo"><label>Vive completamente solo/a</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
-                    <input type="radio" name="amB_Vivienda" value="familiares"><label>Comparte con familiares</label>
-                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')"><input type="radio" name="amB_Vivienda" value="solo"><label>Vive completamente solo/a</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')"><input type="radio" name="amB_Vivienda" value="familiares"><label>Comparte con familiares</label></div>
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">c) Cantidad de miembros del grupo familiar</label>
                 <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
-                    <input type="radio" name="amB_Miembros" value="1-3"><label>1-3 personas</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
-                    <input type="radio" name="amB_Miembros" value="3-5"><label>3-5 personas</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
-                    <input type="radio" name="amB_Miembros" value="5+"><label>Mayor a 5 personas</label>
-                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="1-3"><label>1-3 personas</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="3-5"><label>3-5 personas</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="5+"><label>Mayor a 5 personas</label></div>
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">d) Miembros del grupo que perciben ingresos</label>
                 <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
-                    <input type="radio" name="amB_IngresosMiembro" value="1"><label>1</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
-                    <input type="radio" name="amB_IngresosMiembro" value="2"><label>2</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
-                    <input type="radio" name="amB_IngresosMiembro" value="2+"><label>Mas de 2</label>
-                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="1"><label>1</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="2"><label>2</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="2+"><label>Mas de 2</label></div>
                 </div>
               </div>
             </div>
             <div class="form-section">
               <div class="section-title">2. Salud (seleccione todas las que apliquen)</div>
               <div class="checkbox-group">
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Encamado" value="SI"><label for="amB_Encamado">Encamado/a</label>
-                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Encamado" value="SI"><label for="amB_Encamado">Encamado/a</label></div>
                 <div style="padding-left:var(--spacing-md); font-weight:600; margin:var(--spacing-sm) 0;">Enfermedades Neurodegenerativas:</div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Parkinson" value="SI"><label for="amB_Parkinson">Parkinson</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Alzheimer" value="SI"><label for="amB_Alzheimer">Alzheimer</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Trastorno" value="SI"><label for="amB_Trastorno">Trastorno Neurocognitivo Mayor (demencia)</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_InsufRenal" value="SI"><label for="amB_InsufRenal">Insuficiencia Renal (dialisis)</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Cancer" value="SI"><label for="amB_Cancer">Cancer</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_InsufCardiaca" value="SI"><label for="amB_InsufCardiaca">Insuficiencia Cardiaca</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Artritis" value="SI"><label for="amB_Artritis">Artritis Reumatoidea</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_Esclerosis" value="SI"><label for="amB_Esclerosis">Esclerosis Multiple</label>
-                </div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                  <input type="checkbox" id="amB_SaludOtroCheck" value="SI" onchange="app.toggleOtro('amB_SaludOtro')"><label for="amB_SaludOtroCheck">Otro</label>
-                </div>
-                <div class="form-group hidden" id="amB_SaludOtro">
-                  <input type="text" class="form-input" placeholder="Especifique otra condicion">
-                </div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Parkinson" value="SI"><label for="amB_Parkinson">Parkinson</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Alzheimer" value="SI"><label for="amB_Alzheimer">Alzheimer</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Trastorno" value="SI"><label for="amB_Trastorno">Trastorno Neurocognitivo Mayor (demencia)</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_InsufRenal" value="SI"><label for="amB_InsufRenal">Insuficiencia Renal (dialisis)</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Cancer" value="SI"><label for="amB_Cancer">Cancer</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_InsufCardiaca" value="SI"><label for="amB_InsufCardiaca">Insuficiencia Cardiaca</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Artritis" value="SI"><label for="amB_Artritis">Artritis Reumatoidea</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Esclerosis" value="SI"><label for="amB_Esclerosis">Esclerosis Multiple</label></div>
+                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_SaludOtroCheck" value="SI" onchange="app.toggleOtro('amB_SaludOtro')"><label for="amB_SaludOtroCheck">Otro</label></div>
+                <div class="form-group hidden" id="amB_SaludOtro"><input type="text" class="form-input" placeholder="Especifique otra condicion"></div>
               </div>
             </div>
             <div class="form-section">
               <div class="section-title">3. Situacion Economica</div>
               <div class="radio-group">
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
-                  <input type="radio" name="amB_Economica" value="todo"><label>Si, alcanzan para todo lo necesario</label>
-                </div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
-                  <input type="radio" name="amB_Economica" value="estricto"><label>Permiten cubrir lo estrictamente necesario</label>
-                </div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
-                  <input type="radio" name="amB_Economica" value="no_basico"><label>No alcanzan para cubrir lo basico</label>
-                </div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
-                  <input type="radio" name="amB_Economica" value="dependencia"><label>Depende totalmente de ayuda externa</label>
-                </div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="todo"><label>Si, alcanzan para todo lo necesario</label></div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="estricto"><label>Permiten cubrir lo estrictamente necesario</label></div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="no_basico"><label>No alcanzan para cubrir lo basico</label></div>
+                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="dependencia"><label>Depende totalmente de ayuda externa</label></div>
               </div>
             </div>
           </div>
@@ -474,9 +399,7 @@
       </div>
       <div class="status-bar">
         <div class="status-item">
-          <span class="gps-indicator obtaining" id="gpsNNA">
-            <span class="status-indicator syncing"></span> Obteniendo GPS...
-          </span>
+          <span class="gps-indicator obtaining" id="gpsNNA"><span class="status-indicator syncing"></span> Obteniendo GPS...</span>
         </div>
         <div class="status-item" id="nnaPaso">Paso 1 de 2</div>
       </div>
@@ -484,7 +407,6 @@
         <div class="progress-bar"><div class="progress-fill" id="progressNNA" style="width:50%"></div></div>
         <p class="progress-text" id="progressTextNNA">Paso 1 de 2: Datos personales</p>
 
-        <!-- PASO 1: DATOS PERSONALES -->
         <div id="pasoNNA1">
           <div class="card">
             <div class="card-title">🔍 Busqueda por Cedula (Representante)</div>
@@ -516,7 +438,6 @@
               <label class="form-label">Nombre y Apellido del NNA <span class="required">*</span></label>
               <input type="text" class="form-input" id="nnaNombre" placeholder="Nombre completo del nino/a">
             </div>
-            <!-- NUEVO: Fecha de Nacimiento y Edad automatica -->
             <div class="form-group">
               <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
               <input type="date" class="form-input" id="nnaFechaNacimiento" onchange="app.calcularEdad('nna')">
@@ -539,7 +460,6 @@
           </div>
         </div>
 
-        <!-- PASO 2: ESCOLARIZACION -->
         <div id="pasoNNA2" class="hidden">
           <div class="card">
             <div class="card-title">📋 Situacion de Escolarizacion</div>
@@ -564,33 +484,15 @@
               <div class="form-group">
                 <label class="form-label">2. Motivo de no escolarizacion (si aplica)</label>
                 <div class="checkbox-group">
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo1" value="economico"><label for="nnaMotivo1">Razones economicas</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo2" value="discapacidad"><label for="nnaMotivo2">Discapacidad o condicion de salud</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo3" value="trabajo"><label for="nnaMotivo3">Trabajo infantil</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo4" value="embarazo"><label for="nnaMotivo4">Embarazo adolescente</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo5" value="violencia"><label for="nnaMotivo5">Violencia o inseguridad</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo6" value="desplazamiento"><label for="nnaMotivo6">Desplazamiento o migracion</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivo7" value="falta_documentos"><label for="nnaMotivo7">Falta de documentos</label>
-                  </div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)">
-                    <input type="checkbox" id="nnaMotivoOtroCheck" value="otro" onchange="app.toggleOtro('nnaMotivoOtro')"><label for="nnaMotivoOtroCheck">Otro</label>
-                  </div>
-                  <div class="form-group hidden" id="nnaMotivoOtro">
-                    <input type="text" class="form-input" placeholder="Especifique otro motivo">
-                  </div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo1" value="economico"><label for="nnaMotivo1">Razones economicas</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo2" value="discapacidad"><label for="nnaMotivo2">Discapacidad o condicion de salud</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo3" value="trabajo"><label for="nnaMotivo3">Trabajo infantil</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo4" value="embarazo"><label for="nnaMotivo4">Embarazo adolescente</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo5" value="violencia"><label for="nnaMotivo5">Violencia o inseguridad</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo6" value="desplazamiento"><label for="nnaMotivo6">Desplazamiento o migracion</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo7" value="falta_documentos"><label for="nnaMotivo7">Falta de documentos</label></div>
+                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivoOtroCheck" value="otro" onchange="app.toggleOtro('nnaMotivoOtro')"><label for="nnaMotivoOtroCheck">Otro</label></div>
+                  <div class="form-group hidden" id="nnaMotivoOtro"><input type="text" class="form-input" placeholder="Especifique otro motivo"></div>
                 </div>
               </div>
               <div class="form-group">
@@ -603,18 +505,10 @@
               <div class="form-group">
                 <label class="form-label">4. Tipo de vivienda</label>
                 <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
-                    <input type="radio" name="nnaVivienda" value="propia"><label>Propia</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
-                    <input type="radio" name="nnaVivienda" value="alquilada"><label>Alquilada</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
-                    <input type="radio" name="nnaVivienda" value="prestada"><label>Prestada/Invadida</label>
-                  </div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')">
-                    <input type="radio" name="nnaVivienda" value="otra"><label>Otra</label>
-                  </div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="propia"><label>Propia</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="alquilada"><label>Alquilada</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="prestada"><label>Prestada/Invadida</label></div>
+                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="otra"><label>Otra</label></div>
                 </div>
               </div>
             </div>
@@ -720,7 +614,6 @@
 
   <script src="app.js"></script>
   <script>
-    // Suprimir errores de extensiones del navegador
     window.addEventListener('error', function(e) {
       if (e.message && e.message.includes('runtime.lastError')) {
         e.preventDefault();
