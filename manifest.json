@@ -1,13 +1,13 @@
 {
-  "name": "Diagnóstico Social Comunitario",
+  "name": "Diagnostico Social Comunitario",
   "short_name": "DiagSocial",
-  "description": "Aplicación para recopilar datos de diagnóstico social comunitario - 100% offline",
-  "start_url": "/",
+  "description": "Aplicacion para diagnostico social comunitario - 100% offline",
+  "start_url": "/diagnostico-social/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1976d2",
   "orientation": "portrait",
-  "scope": "/",
+  "scope": "/diagnostico-social/",
   "icons": [
     {
       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%231976d2' width='192' height='192' rx='24'/%3E%3Ctext x='96' y='120' font-size='80' text-anchor='middle' fill='white'%3E📋%3C/text%3E%3C/svg%3E",
