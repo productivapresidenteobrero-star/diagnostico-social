@@ -1,18 +1,23 @@
 // ============================================
 // DIAGNOSTICO SOCIAL COMUNITARIO - APP.JS
-// Version: 1.0.5
+// PWA Offline-First para trabajo de campo
+// Version: 2.0.0 - CORREGIDO Y PRODUCCION-READY
 // ============================================
 
 const CONFIG = {
-  VERSION: '1.0.5',
+  VERSION: '2.0.0',
   DB_NAME: 'DiagSocialDB',
-  DB_VERSION: 5,
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzLs9lJnuRauQIdiFitSrkQ_EFMHR8KcPkSzAabSVviANkvuffCG91cmRgFuNo3wmLE/exec',
-  TOKEN_SEGURIDAD: 'diag-social-2024',
+  DB_VERSION: 2,
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby15P6rFEjAHDMildl1JtrWSY5NP5zmo7eyt1JhTx-VBbIDLqc3ueeyLSnvQ9gw-rh1/exec',
+  TOKEN_SEGURIDAD: 'diag-social-2024-secure',
   GPS_TIMEOUT: 30000,
   BORRADOR_INTERVAL: 30000,
   MIN_CEDULA_DIGITOS: 6,
-  MAX_VECINOS: 1000
+  MAX_VECINOS: 5000,
+  MAX_SYNC_RETRIES: 3,
+  SYNC_RETRY_DELAY: 2000,
+  LOGIN_MAX_ATTEMPTS: 5,
+  LOGIN_LOCKOUT_MINUTES: 15
 };
 
 class DiagSocialApp {
@@ -22,11 +27,14 @@ class DiagSocialApp {
     this.configGeo = null;
     this.encuestadores = [];
     this.baseVecinos = [];
+    this.preguntasAdicionales = [];
     this.currentGPS = null;
     this.borradorTimer = null;
     this.currentEncuesta = null;
     this.currentSeccion = null;
     this.casoEditando = null;
+    this.loginAttempts = 0;
+    this.loginLockedUntil = null;
   }
 
   async init() {
@@ -41,10 +49,6 @@ class DiagSocialApp {
       this.mostrarPantallaInicial();
       this.iniciarAutoGuardado();
       console.log('[App] Inicializacion completada v' + CONFIG.VERSION);
-
-      if (navigator.onLine && CONFIG.SCRIPT_URL) {
-        setTimeout(() => this.sincronizarEncuestadores(), 2000);
-      }
     } catch (error) {
       console.error('[App] Error en inicializacion:', error);
       this.mostrarToast('Error al iniciar la aplicacion', 'error');
@@ -54,8 +58,15 @@ class DiagSocialApp {
   inicializarIndexedDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => { this.db = request.result; resolve(); };
+      request.onerror = () => {
+        console.error('[DB] Error al abrir:', request.error);
+        this.mostrarToast('Error al abrir base de datos local', 'error');
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains('encuestas')) {
@@ -73,122 +84,114 @@ class DiagSocialApp {
         if (!db.objectStoreNames.contains('encuestadores')) db.createObjectStore('encuestadores', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('configuracion')) db.createObjectStore('configuracion', { keyPath: 'clave' });
         if (!db.objectStoreNames.contains('session')) db.createObjectStore('session', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('preguntas')) {
+          const store = db.createObjectStore('preguntas', { keyPath: 'id' });
+          store.createIndex('cuestionario', 'cuestionario', { unique: false });
+          store.createIndex('activa', 'activa', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('respuestas_adicionales')) {
+          const store = db.createObjectStore('respuestas_adicionales', { keyPath: 'id', autoIncrement: true });
+          store.createIndex('idRegistro', 'idRegistro', { unique: false });
+        }
         if (!db.objectStoreNames.contains('metadatos')) db.createObjectStore('metadatos', { keyPath: 'clave' });
+        if (!db.objectStoreNames.contains('login_attempts')) db.createObjectStore('login_attempts', { keyPath: 'id' });
       };
     });
   }
 
   async dbOperation(storeName, mode, operation) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(storeName, mode);
-      const store = transaction.objectStore(storeName);
-      const request = operation(store);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      try {
+        const transaction = this.db.transaction(storeName, mode);
+        const store = transaction.objectStore(storeName);
+        const request = operation(store);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+        transaction.onerror = () => reject(transaction.error);
+      } catch (error) { reject(error); }
     });
   }
-
-  // ============================================
-  // LOGIN Y SESION
-  // ============================================
 
   async cargarSession() {
     try {
       const session = await this.dbOperation('session', 'readonly', store => store.get('current'));
       if (session && session.recordar) this.session = session;
+      const attempts = await this.dbOperation('login_attempts', 'readonly', store => store.get('current'));
+      if (attempts) {
+        this.loginAttempts = attempts.count || 0;
+        this.loginLockedUntil = attempts.lockedUntil || null;
+      }
     } catch (e) { console.log('[Session] No hay sesion guardada'); }
   }
 
   async cargarEncuestadores() {
     try {
       const data = await this.dbOperation('encuestadores', 'readonly', store => store.getAll());
-      this.encuestadores = data.length > 0 ? data : [];
+      this.encuestadores = data.length > 0 ? data : this.getEncuestadoresDefault();
       this.actualizarSelectEncuestadores();
     } catch (e) {
-      this.encuestadores = [];
+      this.encuestadores = this.getEncuestadoresDefault();
       this.actualizarSelectEncuestadores();
     }
   }
 
   getEncuestadoresDefault() {
-    return [];
-  }
-
-  agregarEncuestadorManual() {
-    const nombre = prompt('Nombre completo del encuestador:');
-    if (!nombre) return;
-    const pin = prompt('PIN de 4 digitos:');
-    if (!pin || pin.length !== 4) {
-      this.mostrarToast('PIN debe tener 4 digitos', 'error');
-      return;
-    }
-    const id = Date.now();
-    const encuestador = { id, nombre, password: pin, activo: true };
-    this.encuestadores.push(encuestador);
-    this.dbOperation('encuestadores', 'readwrite', store => store.put(encuestador));
-    this.actualizarSelectEncuestadores();
-    this.mostrarToast('Encuestador agregado', 'success');
+    return [
+      { id: 1, nombre: 'Maria Garcia', password: '1234', activo: true },
+      { id: 2, nombre: 'Jose Rodriguez', password: '5678', activo: true },
+      { id: 3, nombre: 'Ana Martinez', password: '9012', activo: true }
+    ];
   }
 
   actualizarSelectEncuestadores() {
     const select = document.getElementById('loginNombre');
+    if (!select) return;
     select.innerHTML = '<option value="">-- Seleccione su nombre --</option>';
-
-    if (this.encuestadores.length === 0) {
-      select.innerHTML += '<option value="__empty__" disabled>⚠️ Sincronice para cargar encuestadores</option>';
-    } else {
-      this.encuestadores.filter(e => e.activo).forEach(e => {
-        const option = document.createElement('option');
-        option.value = e.id;
-        option.textContent = e.nombre;
-        select.appendChild(option);
-      });
-    }
-
-    const manualOption = document.createElement('option');
-    manualOption.value = '__manual__';
-    manualOption.textContent = '➕ Agregar encuestador manual...';
-    select.appendChild(manualOption);
-
-    select.onchange = (e) => {
-      if (e.target.value === '__manual__') {
-        this.agregarEncuestadorManual();
-        e.target.value = '';
-      }
-    };
+    this.encuestadores.filter(e => e.activo).forEach(e => {
+      const option = document.createElement('option');
+      option.value = e.id;
+      option.textContent = e.nombre;
+      select.appendChild(option);
+    });
   }
 
   async login() {
+    if (this.loginLockedUntil && new Date() < new Date(this.loginLockedUntil)) {
+      const minRestantes = Math.ceil((new Date(this.loginLockedUntil) - new Date()) / 60000);
+      this.mostrarToast(`Cuenta bloqueada. Intente en ${minRestantes} minutos.`, 'error');
+      return;
+    }
     const nombreId = document.getElementById('loginNombre').value;
     const pin = document.getElementById('loginPin').value;
     const recordar = document.getElementById('loginRecordar').checked;
-
-    if (!nombreId || !pin) {
-      this.mostrarToast('Ingrese nombre y PIN', 'error');
-      return;
-    }
-
+    if (!nombreId || !pin) { this.mostrarToast('Ingrese nombre y PIN', 'error'); return; }
+    if (!/^\d{4}$/.test(pin)) { this.mostrarToast('El PIN debe ser de 4 digitos', 'error'); return; }
     const encuestador = this.encuestadores.find(e => e.id == nombreId);
     if (!encuestador || encuestador.password !== pin) {
-      this.mostrarToast('PIN incorrecto', 'error');
+      this.loginAttempts++;
+      const remaining = CONFIG.LOGIN_MAX_ATTEMPTS - this.loginAttempts;
+      if (this.loginAttempts >= CONFIG.LOGIN_MAX_ATTEMPTS) {
+        const lockedUntil = new Date(Date.now() + CONFIG.LOGIN_LOCKOUT_MINUTES * 60000);
+        this.loginLockedUntil = lockedUntil.toISOString();
+        await this.dbOperation('login_attempts', 'readwrite', store => store.put({ id: 'current', count: this.loginAttempts, lockedUntil: this.loginLockedUntil }));
+        this.mostrarToast(`Cuenta bloqueada por ${CONFIG.LOGIN_LOCKOUT_MINUTES} minutos.`, 'error');
+      } else {
+        await this.dbOperation('login_attempts', 'readwrite', store => store.put({ id: 'current', count: this.loginAttempts, lockedUntil: null }));
+        this.mostrarToast(`PIN incorrecto. ${remaining} intentos restantes.`, 'error');
+      }
       return;
     }
-
-    this.session = {
-      id: 'current',
-      encuestadorId: encuestador.id,
-      nombre: encuestador.nombre,
-      fechaLogin: new Date().toISOString(),
-      recordar: recordar
-    };
-
+    this.loginAttempts = 0;
+    this.loginLockedUntil = null;
+    await this.dbOperation('login_attempts', 'readwrite', store => store.put({ id: 'current', count: 0, lockedUntil: null }));
+    this.session = { id: 'current', encuestadorId: encuestador.id, nombre: encuestador.nombre, fechaLogin: new Date().toISOString(), recordar: recordar };
     await this.dbOperation('session', 'readwrite', store => store.put(this.session));
     this.mostrarToast(`Bienvenido, ${encuestador.nombre}`, 'success');
     this.mostrarMenu();
   }
 
   async cerrarSesion() {
-    if (confirm('¿Esta seguro de cerrar sesion?')) {
+    if (confirm('Esta seguro de cerrar sesion?')) {
       await this.dbOperation('session', 'readwrite', store => store.delete('current'));
       this.session = null;
       this.mostrarPantalla('screenLogin');
@@ -196,25 +199,15 @@ class DiagSocialApp {
     }
   }
 
-  // ============================================
-  // NAVEGACION
-  // ============================================
-
   mostrarPantallaInicial() {
     if (this.session && this.session.recordar) this.mostrarMenu();
     else this.mostrarPantalla('screenLogin');
   }
 
   mostrarPantalla(pantallaId) {
-    document.querySelectorAll('.screen, .login-screen').forEach(s => {
-      s.classList.add('hidden');
-      s.classList.remove('active');
-    });
+    document.querySelectorAll('.screen, .login-screen').forEach(s => { s.classList.add('hidden'); s.classList.remove('active'); });
     const pantalla = document.getElementById(pantallaId);
-    if (pantalla) {
-      pantalla.classList.remove('hidden');
-      pantalla.classList.add('active');
-    }
+    if (pantalla) { pantalla.classList.remove('hidden'); pantalla.classList.add('active'); window.scrollTo(0, 0); }
   }
 
   mostrarMenu() {
@@ -223,158 +216,69 @@ class DiagSocialApp {
     this.actualizarEstadisticasMenu();
   }
 
-  volverMenu() {
-    this.mostrarMenu();
-    this.resetearFormularios();
-  }
-
-  // ============================================
-  // CONFIGURACION
-  // ============================================
+  volverMenu() { this.mostrarMenu(); this.resetearFormularios(); }
 
   async cargarConfiguracion() {
     try {
       const config = await this.dbOperation('configuracion', 'readonly', store => store.get('geografica'));
-      if (config) {
-        this.configGeo = config;
-        this.llenarConfiguracion();
-      }
+      if (config) { this.configGeo = config; this.llenarConfiguracion(); }
     } catch (e) { console.log('[Config] No hay configuracion guardada'); }
   }
 
   llenarConfiguracion() {
     if (!this.configGeo) return;
-    document.getElementById('cfgEstado').value = this.configGeo.estado || '';
-    document.getElementById('cfgMunicipio').value = this.configGeo.municipio || '';
-    document.getElementById('cfgParroquia').value = this.configGeo.parroquia || '';
-    document.getElementById('cfgCircuito').value = this.configGeo.circuito || '';
-    document.getElementById('cfgConsejo').value = this.configGeo.consejo || '';
-    document.getElementById('cfgCalle').value = this.configGeo.calle || '';
+    const campos = ['cfgEstado', 'cfgMunicipio', 'cfgParroquia', 'cfgCircuito', 'cfgConsejo', 'cfgCalle'];
+    campos.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = this.configGeo[id.replace('cfg', '').toLowerCase()] || '';
+    });
   }
 
-  abrirConfiguracion() {
-    this.llenarConfiguracion();
-    this.mostrarPantalla('screenConfig');
-  }
+  abrirConfiguracion() { this.llenarConfiguracion(); this.mostrarPantalla('screenConfig'); }
 
   async guardarConfiguracion() {
-    const config = {
-      clave: 'geografica',
-      estado: document.getElementById('cfgEstado').value.trim(),
-      municipio: document.getElementById('cfgMunicipio').value.trim(),
-      parroquia: document.getElementById('cfgParroquia').value.trim(),
-      circuito: document.getElementById('cfgCircuito').value.trim(),
-      consejo: document.getElementById('cfgConsejo').value.trim(),
-      calle: document.getElementById('cfgCalle').value.trim()
-    };
-
-    if (!config.estado || !config.municipio || !config.parroquia || !config.consejo || !config.calle) {
-      this.mostrarToast('Complete todos los campos obligatorios', 'error');
-      return;
-    }
-
+    const config = { clave: 'geografica', estado: document.getElementById('cfgEstado').value.trim(), municipio: document.getElementById('cfgMunicipio').value.trim(), parroquia: document.getElementById('cfgParroquia').value.trim(), circuito: document.getElementById('cfgCircuito').value.trim(), consejo: document.getElementById('cfgConsejo').value.trim(), calle: document.getElementById('cfgCalle').value.trim() };
+    const obligatorios = ['estado', 'municipio', 'parroquia', 'consejo', 'calle'];
+    for (const campo of obligatorios) { if (!config[campo]) { this.mostrarToast(`Complete todos los campos obligatorios`, 'error'); return; } }
     this.configGeo = config;
     await this.dbOperation('configuracion', 'readwrite', store => store.put(config));
     this.mostrarToast('Configuracion guardada', 'success');
     this.volverMenu();
   }
 
-  // ============================================
-  // GPS
-  // ============================================
-
   async capturarGPS(pantalla) {
     const indicator = document.getElementById(`gps${pantalla}`);
     if (!indicator) return;
-
     indicator.className = 'gps-indicator obtaining';
-    indicator.innerHTML = '<span class="status-indicator syncing"></span> Obteniendo GPS...';
-
+    indicator.innerHTML = '📡 Obteniendo GPS...';
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        indicator.className = 'gps-indicator failed';
-        indicator.innerHTML = '❌ GPS no disponible';
-        this.currentGPS = { latitud: '', longitud: '', precision: '' };
-        resolve(this.currentGPS);
-        return;
+        indicator.className = 'gps-indicator failed'; indicator.innerHTML = '❌ GPS no disponible';
+        this.currentGPS = { latitud: '', longitud: '', precision: '' }; resolve(this.currentGPS); return;
       }
-
       const timeout = setTimeout(() => {
-        indicator.className = 'gps-indicator failed';
-        indicator.innerHTML = '⚠️ GPS no obtenido (timeout)';
-        this.currentGPS = { latitud: '', longitud: '', precision: '' };
-        resolve(this.currentGPS);
+        indicator.className = 'gps-indicator failed'; indicator.innerHTML = '⚠️ GPS no obtenido (timeout)';
+        this.currentGPS = { latitud: '', longitud: '', precision: '' }; resolve(this.currentGPS);
       }, CONFIG.GPS_TIMEOUT);
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
           clearTimeout(timeout);
-          this.currentGPS = {
-            latitud: position.coords.latitude,
-            longitud: position.coords.longitude,
-            precision: position.coords.accuracy
-          };
-          indicator.className = 'gps-indicator obtained';
-          indicator.innerHTML = `✅ GPS OK (${this.currentGPS.precision.toFixed(0)}m)`;
+          this.currentGPS = { latitud: position.coords.latitude, longitud: position.coords.longitude, precision: position.coords.accuracy };
+          indicator.className = 'gps-indicator obtained'; indicator.innerHTML = `✅ GPS OK (${this.currentGPS.precision.toFixed(0)}m)`;
           resolve(this.currentGPS);
         },
         (error) => {
-          clearTimeout(timeout);
-          indicator.className = 'gps-indicator failed';
-          indicator.innerHTML = '⚠️ GPS no disponible';
-          this.currentGPS = { latitud: '', longitud: '', precision: '' };
-          resolve(this.currentGPS);
+          clearTimeout(timeout); indicator.className = 'gps-indicator failed';
+          let msg = '⚠️ GPS no disponible';
+          if (error.code === 1) msg = '⚠️ Permiso de GPS denegado';
+          if (error.code === 2) msg = '⚠️ GPS no puede determinar posicion';
+          indicator.innerHTML = msg;
+          this.currentGPS = { latitud: '', longitud: '', precision: '' }; resolve(this.currentGPS);
         },
         { enableHighAccuracy: true, timeout: CONFIG.GPS_TIMEOUT, maximumAge: 0 }
       );
     });
   }
-
-  // ============================================
-  // CALCULAR EDAD AUTOMATICA
-  // ============================================
-
-  calcularEdad(tipo) {
-    const fechaInputId = tipo === 'am' ? 'amFechaNacimiento' : 'nnaFechaNacimiento';
-    const edadInputId = tipo === 'am' ? 'amEdad' : 'nnaEdad';
-
-    const fechaNacimiento = document.getElementById(fechaInputId).value;
-    const edadInput = document.getElementById(edadInputId);
-
-    if (!fechaNacimiento) {
-      edadInput.value = '';
-      return;
-    }
-
-    const hoy = new Date();
-    const nacimiento = new Date(fechaNacimiento);
-
-    let edad = hoy.getFullYear() - nacimiento.getFullYear();
-    const mes = hoy.getMonth() - nacimiento.getMonth();
-
-    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
-      edad--;
-    }
-
-    if (edad < 0 || edad > 120) {
-      edadInput.value = '';
-      this.mostrarToast('Verifique la fecha de nacimiento', 'warning');
-      return;
-    }
-
-    edadInput.value = edad;
-
-    if (tipo === 'nna' && edad >= 18) {
-      this.mostrarToast('El NNA debe ser menor de 18 anos', 'warning');
-    }
-    if (tipo === 'am' && edad < 60) {
-      this.mostrarToast('El adulto mayor debe tener 60+ anos', 'warning');
-    }
-  }
-
-  // ============================================
-  // AUTOCOMPLETADO POR CEDULA
-  // ============================================
 
   async cargarBaseVecinos() {
     try {
@@ -389,172 +293,76 @@ class DiagSocialApp {
     const el = document.getElementById('loginDbStatus');
     const elMenu = document.getElementById('statVecinos');
     const elFecha = document.getElementById('lastVecinosUpdate');
-
     if (el) el.textContent = `Base vecinos: ${cantidad} registros`;
     if (elMenu) elMenu.textContent = cantidad;
     if (elFecha) elFecha.textContent = fecha ? this.formatearFecha(fecha) : 'Sin datos';
   }
 
   buscarVecino(tipo) {
-    const inputId = tipo === 'am' ? 'amCedula' : 'nnaCedulaRep';
-    const cedula = document.getElementById(inputId).value;
-    const resultadoId = tipo === 'am' ? 'amBusquedaResultado' : 'nnaBusquedaResultado';
+    const inputId = tipo === 'am' ? 'amCedula' : tipo === 'nna' ? 'nnaCedula' : 'repCedula';
+    const cedula = document.getElementById(inputId).value.trim();
+    const resultadoId = tipo === 'am' ? 'amBusquedaResultado' : tipo === 'nna' ? 'nnaBusquedaResultado' : 'repBusquedaResultado';
     const contenedor = document.getElementById(resultadoId);
-
-    if (cedula.length < CONFIG.MIN_CEDULA_DIGITOS) {
-      contenedor.innerHTML = '';
-      return;
-    }
-
+    if (!contenedor) return;
+    if (cedula.length < CONFIG.MIN_CEDULA_DIGITOS) { contenedor.innerHTML = ''; return; }
     let vecino = this.baseVecinos.find(v => v.Cedula === cedula);
     if (!vecino) vecino = this.baseVecinos.find(v => v.Cedula && v.Cedula.includes(cedula));
-
     if (vecino) {
       this.autocompletarCampos(tipo, vecino);
-      contenedor.innerHTML = '<div class="alert alert-success"><span>✅</span><span>Datos encontrados. <strong>Verifique la informacion</strong> y edite si esta desactualizada.</span></div>';
+      contenedor.innerHTML = `<div class="alert alert-success">✅ <strong>Datos encontrados.</strong> Verifique la informacion y edite si esta desactualizada.</div>`;
     } else {
       this.limpiarAutocompletado(tipo);
-      contenedor.innerHTML = '<div class="alert alert-warning"><span>⚠️</span><span>Cedula no registrada. <strong>Complete los datos manualmente</strong>.</span></div>';
+      contenedor.innerHTML = `<div class="alert alert-warning">⚠️ <strong>Cedula no registrada.</strong> Complete los datos manualmente.</div>`;
     }
   }
 
   autocompletarCampos(tipo, vecino) {
-    if (tipo === 'am') {
-      const nombreEl = document.getElementById('amNombre');
-      const apellidoEl = document.getElementById('amApellido');
-
-      if (nombreEl && vecino.Nombre_y_Apellido) {
-        const partes = vecino.Nombre_y_Apellido.split(' ');
-        nombreEl.value = partes[0] || vecino.Nombre_y_Apellido;
-        if (apellidoEl) apellidoEl.value = partes.slice(1).join(' ') || '';
-        nombreEl.classList.add('autocomplete-field');
-        if (apellidoEl) apellidoEl.classList.add('autocomplete-field');
-      }
-
-      const campos = [
-        { id: 'amTelefono', campo: 'Telefono' },
-        { id: 'amSector', campo: 'Sector' },
-        { id: 'amCalle', campo: 'Calle_Avenida' },
-        { id: 'amNroCasa', campo: 'Nro_Casa' },
-        { id: 'amReferencia', campo: 'Referencia' }
-      ];
-
-      campos.forEach(c => {
-        const el = document.getElementById(c.id);
-        if (el && vecino[c.campo]) {
-          el.value = vecino[c.campo];
-          el.classList.add('autocomplete-field');
-        }
-      });
-
-      if (vecino.Fecha_Nacimiento) {
-        const fechaEl = document.getElementById('amFechaNacimiento');
-        if (fechaEl) {
-          fechaEl.value = vecino.Fecha_Nacimiento;
-          fechaEl.classList.add('autocomplete-field');
-          this.calcularEdad('am');
-        }
-      }
-    } else if (tipo === 'nna') {
-      const nombreRepEl = document.getElementById('nnaNombreRep');
-      if (nombreRepEl && vecino.Nombre_y_Apellido) {
-        nombreRepEl.value = vecino.Nombre_y_Apellido;
-        nombreRepEl.classList.add('autocomplete-field');
-      }
-      const telefonoRepEl = document.getElementById('nnaTelefonoRep');
-      if (telefonoRepEl && vecino.Telefono) {
-        telefonoRepEl.value = vecino.Telefono;
-        telefonoRepEl.classList.add('autocomplete-field');
-      }
-      const direccionRepEl = document.getElementById('nnaDireccionRep');
-      if (direccionRepEl && vecino.Calle_Avenida) {
-        direccionRepEl.value = vecino.Calle_Avenida;
-        direccionRepEl.classList.add('autocomplete-field');
-      }
-    }
+    const campos = { am: ['amNombre', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia'], nna: ['nnaNombre', 'nnaSector', 'nnaCalle', 'nnaNroCasa', 'nnaReferencia'], rep: ['repNombre', 'repTelefono'] };
+    const mapeo = { amNombre: 'Nombre_y_Apellido', amTelefono: 'Telefono', amSector: 'Sector', amCalle: 'Calle_Avenida', amNroCasa: 'Nro_Casa', amReferencia: 'Referencia', nnaNombre: 'Nombre_y_Apellido', nnaSector: 'Sector', nnaCalle: 'Calle_Avenida', nnaNroCasa: 'Nro_Casa', nnaReferencia: 'Referencia', repNombre: 'Nombre_y_Apellido', repTelefono: 'Telefono' };
+    campos[tipo].forEach(campoId => {
+      const el = document.getElementById(campoId);
+      if (el && vecino[mapeo[campoId]]) { el.value = vecino[mapeo[campoId]]; el.classList.add('autocomplete-field'); }
+    });
   }
 
   limpiarAutocompletado(tipo) {
-    const campos = tipo === 'am' 
-      ? ['amNombre', 'amApellido', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia', 'amFechaNacimiento', 'amEdad']
-      : ['nnaNombreRep', 'nnaTelefonoRep', 'nnaDireccionRep'];
-
-    campos.forEach(campoId => {
-      const el = document.getElementById(campoId);
-      if (el) {
-        el.value = '';
-        el.classList.remove('autocomplete-field');
-      }
-    });
+    const campos = { am: ['amNombre', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia'], nna: ['nnaNombre', 'nnaSector', 'nnaCalle', 'nnaNroCasa', 'nnaReferencia'], rep: ['repNombre', 'repTelefono'] };
+    campos[tipo].forEach(campoId => { const el = document.getElementById(campoId); if (el) { el.value = ''; el.classList.remove('autocomplete-field'); } });
   }
 
-  // ============================================
-  // FORMULARIOS - ADULTOS MAYORES
-  // ============================================
-
   abrirFormulario(tipo) {
-    if (tipo === 'adultos') {
-      this.mostrarPantalla('screenAdultos');
-      this.resetearFormularioAdultos();
-      this.capturarGPS('Adultos');
-    } else if (tipo === 'nna') {
-      this.mostrarPantalla('screenNNA');
-      this.resetearFormularioNNA();
-      this.capturarGPS('NNA');
-    }
+    if (tipo === 'adultos') { this.mostrarPantalla('screenAdultos'); this.resetearFormularioAdultos(); this.capturarGPS('Adultos'); }
+    else if (tipo === 'nna') { this.mostrarPantalla('screenNNA'); this.resetearFormularioNNA(); this.capturarGPS('NNA'); }
   }
 
   resetearFormularioAdultos() {
-    this.currentEncuesta = { tipo: 'adultos', datos: {} };
-    this.currentSeccion = null;
-
-    const campos = ['amCedula', 'amNombre', 'amApellido', 'amFechaNacimiento', 'amEdad', 'amTelefono', 
-                    'amSector', 'amCalle', 'amNroCasa', 'amReferencia', 'amNecesidad', 'amBNecesidad'];
-    campos.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.value = ''; el.classList.remove('autocomplete-field'); }
-    });
-
-    ['amEstadoCaso', 'amBEstadoCaso'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.selectedIndex = 0;
-    });
-
-    document.querySelectorAll('#screenAdultos .option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
-    document.querySelectorAll('#screenAdultos .radio-item').forEach(item => item.classList.remove('selected'));
-    document.querySelectorAll('#screenAdultos input[type="radio"]').forEach(r => r.checked = false);
-    document.querySelectorAll('#screenAdultos .checkbox-item').forEach(item => item.classList.remove('checked'));
-    document.querySelectorAll('#screenAdultos input[type="checkbox"]').forEach(c => c.checked = false);
-
-    document.getElementById('amB_SaludOtro')?.classList.add('hidden');
-
+    this.currentEncuesta = { tipo: 'adultos', datos: {} }; this.currentSeccion = null;
+    ['amCedula', 'amNombre', 'amTelefono', 'amSector', 'amCalle', 'amNroCasa', 'amReferencia', 'amNecesidad', 'amBNecesidad'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.classList.remove('autocomplete-field'); } });
+    ['amEstadoCaso', 'amBEstadoCaso'].forEach(id => { const el = document.getElementById(id); if (el) el.selectedIndex = 0; });
+    document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
+    document.querySelectorAll('.radio-item').forEach(item => item.classList.remove('selected'));
+    document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+    document.querySelectorAll('.checkbox-item').forEach(item => item.classList.remove('checked'));
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    ['amB_SaludOtro'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
     document.getElementById('pasoAdultos1').classList.remove('hidden');
     document.getElementById('pasoAdultos2').classList.add('hidden');
     document.getElementById('pasoAdultos3A').classList.add('hidden');
     document.getElementById('pasoAdultos3B').classList.add('hidden');
-
     document.getElementById('progressAdultos').style.width = '33%';
     document.getElementById('progressTextAdultos').textContent = 'Paso 1 de 3: Datos personales';
     document.getElementById('adultosPaso').textContent = 'Paso 1 de 3';
     document.getElementById('adultosSubtitle').textContent = 'Datos personales';
-    document.getElementById('amBusquedaResultado').innerHTML = '';
+    const busqueda = document.getElementById('amBusquedaResultado'); if (busqueda) busqueda.innerHTML = '';
   }
 
   adultosSiguiente(paso) {
     if (paso === 2) {
-      if (!document.getElementById('amCedula').value.trim()) {
-        this.mostrarToast('Ingrese la cedula', 'error');
-        return;
-      }
-      if (!document.getElementById('amNombre').value.trim() || !document.getElementById('amApellido').value.trim()) {
-        this.mostrarToast('Ingrese nombre y apellido', 'error');
-        return;
-      }
-      if (!document.getElementById('amFechaNacimiento').value) {
-        this.mostrarToast('Ingrese la fecha de nacimiento', 'error');
-        return;
-      }
-
+      const cedula = document.getElementById('amCedula').value.trim();
+      const nombre = document.getElementById('amNombre').value.trim();
+      if (!cedula) { this.mostrarToast('Ingrese la cedula', 'error'); return; }
+      if (!this.validarCedulaVenezuela(cedula)) { this.mostrarToast('Cedula invalida. Use solo numeros (6-9 digitos).', 'error'); return; }
+      if (!nombre) { this.mostrarToast('Ingrese nombre y apellido', 'error'); return; }
       document.getElementById('pasoAdultos1').classList.add('hidden');
       document.getElementById('pasoAdultos2').classList.remove('hidden');
       document.getElementById('progressAdultos').style.width = '66%';
@@ -586,80 +394,64 @@ class DiagSocialApp {
   seleccionarSeccionAdultos(seccion) {
     this.currentSeccion = seccion;
     document.getElementById('pasoAdultos2').classList.add('hidden');
-
-    if (seccion === 'A') {
-      document.getElementById('pasoAdultos3A').classList.remove('hidden');
-      document.getElementById('adultosSubtitle').textContent = 'Seccion A - Verificacion';
-    } else {
-      document.getElementById('pasoAdultos3B').classList.remove('hidden');
-      document.getElementById('adultosSubtitle').textContent = 'Seccion B - Registro Nuevo';
-    }
-
+    if (seccion === 'A') { document.getElementById('pasoAdultos3A').classList.remove('hidden'); document.getElementById('adultosSubtitle').textContent = 'Seccion A - Verificacion'; }
+    else { document.getElementById('pasoAdultos3B').classList.remove('hidden'); document.getElementById('adultosSubtitle').textContent = 'Seccion B - Registro Nuevo'; }
     document.getElementById('progressAdultos').style.width = '100%';
     document.getElementById('progressTextAdultos').textContent = `Paso 3 de 3: Seccion ${seccion}`;
     document.getElementById('adultosPaso').textContent = 'Paso 3 de 3';
   }
 
-  // ============================================
-  // FORMULARIOS - NNA
-  // ============================================
-
   resetearFormularioNNA() {
     this.currentEncuesta = { tipo: 'nna', datos: {} };
-
-    const campos = ['nnaCedulaRep', 'nnaNombreRep', 'nnaTelefonoRep', 'nnaDireccionRep',
-                    'nnaNombre', 'nnaFechaNacimiento', 'nnaEdad', 'nnaNecesidad'];
-    campos.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.value = ''; el.classList.remove('autocomplete-field'); }
-    });
-
-    document.getElementById('nnaEstadoCaso').selectedIndex = 0;
+    ['nnaCedula', 'nnaNombre', 'nnaEdad', 'nnaGrado', 'repCedula', 'repNombre', 'repTelefono', 'repParentesco', 'nnaFechaInscripcion', 'nnaNotas'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.classList.remove('autocomplete-field'); } });
+    const estadoCaso = document.getElementById('nnaEstadoCaso'); if (estadoCaso) estadoCaso.selectedIndex = 0;
     document.querySelectorAll('#screenNNA .option-btn').forEach(btn => btn.classList.remove('selected-yes', 'selected-no'));
     document.querySelectorAll('#screenNNA .checkbox-item').forEach(item => item.classList.remove('checked'));
     document.querySelectorAll('#screenNNA input[type="checkbox"]').forEach(c => c.checked = false);
-    document.querySelectorAll('#screenNNA .radio-item').forEach(item => item.classList.remove('selected'));
-    document.querySelectorAll('#screenNNA input[type="radio"]').forEach(r => r.checked = false);
-
-    document.getElementById('nnaMotivoOtro')?.classList.add('hidden');
-    document.getElementById('nnaEscolarizacionDetalle')?.classList.add('hidden');
-
-    document.getElementById('pasoNNA1').classList.remove('hidden');
-    document.getElementById('pasoNNA2').classList.add('hidden');
-
-    document.getElementById('progressNNA').style.width = '50%';
-    document.getElementById('progressTextNNA').textContent = 'Paso 1 de 2: Datos personales';
-    document.getElementById('nnaPaso').textContent = 'Paso 1 de 2';
-    document.getElementById('nnaSubtitle').textContent = 'Datos personales';
-    document.getElementById('nnaBusquedaResultado').innerHTML = '';
+    ['nnaDocOtro', 'nnaAccOtro', 'nnaLabOtro', 'nnaTutOtro', 'nnaEcoOtro'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+    ['pasoNNA1', 'pasoNNA2', 'pasoNNA3', 'pasoNNA4'].forEach((id, i) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', i !== 0); });
+    document.getElementById('progressNNA').style.width = '25%';
+    document.getElementById('progressTextNNA').textContent = 'Paso 1 de 4: Datos del NNA';
+    document.getElementById('nnaPaso').textContent = 'Paso 1 de 4';
+    document.getElementById('nnaSubtitle').textContent = 'Datos del NNA';
+    const busquedaNNA = document.getElementById('nnaBusquedaResultado');
+    const busquedaRep = document.getElementById('repBusquedaResultado');
+    if (busquedaNNA) busquedaNNA.innerHTML = '';
+    if (busquedaRep) busquedaRep.innerHTML = '';
   }
 
   nnaSiguiente(paso) {
     if (paso === 2) {
-      if (!document.getElementById('nnaNombre').value.trim()) {
-        this.mostrarToast('Ingrese nombre del NNA', 'error');
-        return;
-      }
-      if (!document.getElementById('nnaFechaNacimiento').value) {
-        this.mostrarToast('Ingrese la fecha de nacimiento del NNA', 'error');
-        return;
-      }
-      const edad = parseInt(document.getElementById('nnaEdad').value);
-      if (!edad || edad < 0 || edad >= 18) {
-        this.mostrarToast('El NNA debe ser menor de 18 anos', 'error');
-        return;
-      }
-      if (!this.getOptionValue('nnaSexo')) {
-        this.mostrarToast('Seleccione el sexo del NNA', 'error');
-        return;
-      }
-
+      const nnaNombre = document.getElementById('nnaNombre').value.trim();
+      const nnaEdad = document.getElementById('nnaEdad').value;
+      const nnaGrado = document.getElementById('nnaGrado').value;
+      if (!nnaNombre) { this.mostrarToast('Ingrese nombre y apellido del NNA', 'error'); return; }
+      if (!nnaEdad || nnaEdad < 0 || nnaEdad > 18) { this.mostrarToast('Ingrese una edad valida del NNA (0-18)', 'error'); return; }
+      if (!nnaGrado) { this.mostrarToast('Seleccione el ultimo grado cursado', 'error'); return; }
       document.getElementById('pasoNNA1').classList.add('hidden');
       document.getElementById('pasoNNA2').classList.remove('hidden');
+      document.getElementById('progressNNA').style.width = '50%';
+      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 4: Datos del representante';
+      document.getElementById('nnaPaso').textContent = 'Paso 2 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Datos del representante';
+    } else if (paso === 3) {
+      const repNombre = document.getElementById('repNombre').value.trim();
+      const repParentesco = document.getElementById('repParentesco').value;
+      if (!repNombre) { this.mostrarToast('Ingrese nombre y apellido del representante', 'error'); return; }
+      if (!repParentesco) { this.mostrarToast('Seleccione el parentesco', 'error'); return; }
+      document.getElementById('pasoNNA2').classList.add('hidden');
+      document.getElementById('pasoNNA3').classList.remove('hidden');
+      document.getElementById('progressNNA').style.width = '75%';
+      document.getElementById('progressTextNNA').textContent = 'Paso 3 de 4: Causas de desescolarizacion';
+      document.getElementById('nnaPaso').textContent = 'Paso 3 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Causas de desescolarizacion';
+    } else if (paso === 4) {
+      document.getElementById('pasoNNA3').classList.add('hidden');
+      document.getElementById('pasoNNA4').classList.remove('hidden');
       document.getElementById('progressNNA').style.width = '100%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 2: Situacion de escolarizacion';
-      document.getElementById('nnaPaso').textContent = 'Paso 2 de 2';
-      document.getElementById('nnaSubtitle').textContent = 'Situacion de escolarizacion';
+      document.getElementById('progressTextNNA').textContent = 'Paso 4 de 4: Seguimiento';
+      document.getElementById('nnaPaso').textContent = 'Paso 4 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Seguimiento del caso';
     }
   }
 
@@ -667,43 +459,42 @@ class DiagSocialApp {
     if (paso === 1) {
       document.getElementById('pasoNNA2').classList.add('hidden');
       document.getElementById('pasoNNA1').classList.remove('hidden');
+      document.getElementById('progressNNA').style.width = '25%';
+      document.getElementById('progressTextNNA').textContent = 'Paso 1 de 4: Datos del NNA';
+      document.getElementById('nnaPaso').textContent = 'Paso 1 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Datos del NNA';
+    } else if (paso === 2) {
+      document.getElementById('pasoNNA3').classList.add('hidden');
+      document.getElementById('pasoNNA2').classList.remove('hidden');
       document.getElementById('progressNNA').style.width = '50%';
-      document.getElementById('progressTextNNA').textContent = 'Paso 1 de 2: Datos personales';
-      document.getElementById('nnaPaso').textContent = 'Paso 1 de 2';
-      document.getElementById('nnaSubtitle').textContent = 'Datos personales';
+      document.getElementById('progressTextNNA').textContent = 'Paso 2 de 4: Datos del representante';
+      document.getElementById('nnaPaso').textContent = 'Paso 2 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Datos del representante';
+    } else if (paso === 3) {
+      document.getElementById('pasoNNA4').classList.add('hidden');
+      document.getElementById('pasoNNA3').classList.remove('hidden');
+      document.getElementById('progressNNA').style.width = '75%';
+      document.getElementById('progressTextNNA').textContent = 'Paso 3 de 4: Causas de desescolarizacion';
+      document.getElementById('nnaPaso').textContent = 'Paso 3 de 4';
+      document.getElementById('nnaSubtitle').textContent = 'Causas de desescolarizacion';
     }
   }
 
-  toggleEscolarizacion(escolarizado) {
-    const detalle = document.getElementById('nnaEscolarizacionDetalle');
-    if (detalle) detalle.classList.toggle('hidden', !escolarizado);
-  }
-
-  // ============================================
-  // INTERACCION UI
-  // ============================================
-
   selectOption(btn) {
-    const name = btn.dataset.name;
-    const value = btn.dataset.value;
-    document.querySelectorAll(`[data-name="${name}"]`).forEach(b => b.classList.remove('selected-yes', 'selected-no'));
+    const name = btn.dataset.name; const value = btn.dataset.value;
+    document.querySelectorAll(`[data-name="${name}"]`).forEach(b => { b.classList.remove('selected-yes', 'selected-no'); });
     btn.classList.add(value === 'SI' ? 'selected-yes' : 'selected-no');
   }
 
   selectRadio(item, name) {
-    document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
-      r.checked = false;
-      r.closest('.radio-item')?.classList.remove('selected');
-    });
+    document.querySelectorAll(`input[name="${name}"]`).forEach(r => { r.checked = false; const parent = r.closest('.radio-item'); if (parent) parent.classList.remove('selected'); });
     const radio = item.querySelector('input[type="radio"]');
-    radio.checked = true;
-    item.classList.add('selected');
+    if (radio) { radio.checked = true; item.classList.add('selected'); }
   }
 
   toggleCheckbox(item) {
     const checkbox = item.querySelector('input[type="checkbox"]');
-    checkbox.checked = !checkbox.checked;
-    item.classList.toggle('checked', checkbox.checked);
+    if (checkbox) { checkbox.checked = !checkbox.checked; item.classList.toggle('checked', checkbox.checked); }
   }
 
   toggleOtro(campoId) {
@@ -712,56 +503,32 @@ class DiagSocialApp {
     if (campo) campo.classList.toggle('hidden', !checkbox.checked);
   }
 
-  // ============================================
-  // GUARDADO
-  // ============================================
-
   async guardarEncuesta(tipo, seccion = null) {
     const id = this.generarId();
     const fechaHora = new Date().toISOString();
     const datos = this.recolectarDatos(tipo, seccion);
     if (!datos) return;
-
-    const encuesta = {
-      id: id,
-      tipo: tipo,
-      seccion: seccion,
-      encuestador: this.session.nombre,
-      encuestadorId: this.session.encuestadorId,
-      fecha: fechaHora,
-      fechaSincronizacion: null,
-      estadoSync: 'pendiente',
-      versionApp: CONFIG.VERSION,
-      datos: datos
-    };
-
-    await this.dbOperation('encuestas', 'readwrite', store => store.put(encuesta));
-    this.mostrarToast('Encuesta guardada correctamente', 'success');
-    this.volverMenu();
+    const encuesta = { id: id, tipo: tipo, seccion: seccion, encuestador: this.session.nombre, encuestadorId: this.session.encuestadorId, fecha: fechaHora, fechaSincronizacion: null, estadoSync: 'pendiente', versionApp: CONFIG.VERSION, datos: datos };
+    try {
+      await this.dbOperation('encuestas', 'readwrite', store => store.put(encuesta));
+      this.mostrarToast('Encuesta guardada correctamente', 'success');
+      this.volverMenu();
+    } catch (error) {
+      console.error('[Guardar] Error:', error);
+      this.mostrarToast('Error al guardar encuesta. Intente de nuevo.', 'error');
+    }
   }
 
-  async guardarBorrador(tipo) {
+  async guardarBorrador(tipo, seccion = null) {
     const id = this.currentEncuesta && this.currentEncuesta.id ? this.currentEncuesta.id : this.generarId();
-    const datos = this.recolectarDatos(tipo, this.currentSeccion, true);
-
-    const borrador = {
-      id: id,
-      tipo: tipo,
-      seccion: this.currentSeccion,
-      encuestador: this.session.nombre,
-      encuestadorId: this.session.encuestadorId,
-      fecha: new Date().toISOString(),
-      estadoSync: 'borrador',
-      versionApp: CONFIG.VERSION,
-      datos: datos
-    };
-
+    const datos = this.recolectarDatos(tipo, seccion, true);
+    const borrador = { id: id, tipo: tipo, seccion: seccion, encuestador: this.session.nombre, encuestadorId: this.session.encuestadorId, fecha: new Date().toISOString(), estadoSync: 'borrador', versionApp: CONFIG.VERSION, datos: datos };
     this.currentEncuesta = borrador;
-    await this.dbOperation('encuestas', 'readwrite', store => store.put(borrador));
-    this.mostrarToast('Borrador guardado', 'info');
+    try { await this.dbOperation('encuestas', 'readwrite', store => store.put(borrador)); this.mostrarToast('Borrador guardado', 'info'); }
+    catch (error) { console.error('[Borrador] Error:', error); }
   }
 
-  recolectarDatos(tipo, seccion, esBorrador = false) {
+recolectarDatos(tipo, seccion, esBorrador = false) {
     const datos = {
       gps: this.currentGPS || { latitud: '', longitud: '', precision: '' },
       geograficos: this.configGeo || {}
@@ -769,10 +536,7 @@ class DiagSocialApp {
 
     if (tipo === 'adultos') {
       datos.cedula = document.getElementById('amCedula').value.trim();
-      datos.nombre = document.getElementById('amNombre').value.trim();
-      datos.apellido = document.getElementById('amApellido').value.trim();
-      datos.fechaNacimiento = document.getElementById('amFechaNacimiento').value;
-      datos.edad = document.getElementById('amEdad').value;
+      datos.nombre_apellido = document.getElementById('amNombre').value.trim();
       datos.telefono = document.getElementById('amTelefono').value.trim();
       datos.sector = document.getElementById('amSector').value.trim();
       datos.calle = document.getElementById('amCalle').value.trim();
@@ -781,91 +545,100 @@ class DiagSocialApp {
       datos.autocompletado = document.getElementById('amNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
 
       if (!esBorrador) {
-        if (!datos.cedula || !datos.nombre || !datos.apellido || !datos.fechaNacimiento) {
-          this.mostrarToast('Complete todos los datos personales obligatorios', 'error');
-          return null;
-        }
-        if (parseInt(datos.edad) < 60) {
-          this.mostrarToast('El adulto mayor debe tener 60+ anos', 'error');
+        if (!datos.cedula || !datos.nombre_apellido) {
+          this.mostrarToast('Complete los datos personales obligatorios', 'error');
           return null;
         }
       }
 
       if (seccion === 'A') {
-        datos.viveSolo = this.getOptionValue('amViveSolo');
+        datos.vive_solo = this.getOptionValue('amViveSolo');
         datos.sosten = this.getOptionValue('amSosten');
-        datos.ingresos = this.getOptionValue('amIngresos');
-        datos.saludDependencia = this.getOptionValue('amSaludDependencia');
+        datos.ingresos_suficientes = this.getOptionValue('amIngresos');
+        datos.salud_dependencia = this.getOptionValue('amSaludDependencia');
         datos.necesidad = document.getElementById('amNecesidad').value.trim();
-        datos.estadoCaso = document.getElementById('amEstadoCaso').value;
-        datos.necesidadResuelta = 'NO';
-        datos.fechaResolucion = '';
-        datos.notasSeguimiento = '';
+        datos.estadoCaso = document.getElementById('amEstadoCaso').value || 'pendiente';
       } else if (seccion === 'B') {
         datos.sosten = this.getOptionValue('amB_Sosten');
-        datos.situacionVivienda = this.getRadioValue('amB_Vivienda');
-        datos.cantMiembros = this.getRadioValue('amB_Miembros');
-        datos.miembrosIngreso = this.getRadioValue('amB_IngresosMiembro');
-        datos.saludEncamado = document.getElementById('amB_Encamado').checked ? 'SI' : 'NO';
-        datos.saludParkinson = document.getElementById('amB_Parkinson').checked ? 'SI' : 'NO';
-        datos.saludAlzheimer = document.getElementById('amB_Alzheimer').checked ? 'SI' : 'NO';
-        datos.saludTrastorno = document.getElementById('amB_Trastorno').checked ? 'SI' : 'NO';
-        datos.saludInsufRenal = document.getElementById('amB_InsufRenal').checked ? 'SI' : 'NO';
-        datos.saludCancer = document.getElementById('amB_Cancer').checked ? 'SI' : 'NO';
-        datos.saludInsufCardiaca = document.getElementById('amB_InsufCardiaca').checked ? 'SI' : 'NO';
-        datos.saludArtritis = document.getElementById('amB_Artritis').checked ? 'SI' : 'NO';
-        datos.saludEsclerosis = document.getElementById('amB_Esclerosis').checked ? 'SI' : 'NO';
-        datos.saludOtro = document.getElementById('amB_SaludOtroCheck').checked ?
+        datos.situacion_vivienda = this.getRadioValue('amB_Vivienda');
+        datos.cant_miembros = this.getRadioValue('amB_Miembros');
+        datos.miembros_ingreso = this.getRadioValue('amB_IngresosMiembro');
+        datos.salud_encamado = document.getElementById('amB_Encamado').checked ? 'SI' : 'NO';
+        datos.salud_parkinson = document.getElementById('amB_Parkinson').checked ? 'SI' : 'NO';
+        datos.salud_alzheimer = document.getElementById('amB_Alzheimer').checked ? 'SI' : 'NO';
+        datos.salud_trastorno = document.getElementById('amB_Trastorno').checked ? 'SI' : 'NO';
+        datos.salud_insuf_renal = document.getElementById('amB_InsufRenal').checked ? 'SI' : 'NO';
+        datos.salud_cancer = document.getElementById('amB_Cancer').checked ? 'SI' : 'NO';
+        datos.salud_insuf_cardiaca = document.getElementById('amB_InsufCardiaca').checked ? 'SI' : 'NO';
+        datos.salud_artritis = document.getElementById('amB_Artritis').checked ? 'SI' : 'NO';
+        datos.salud_esclerosis = document.getElementById('amB_Esclerosis').checked ? 'SI' : 'NO';
+        datos.salud_otro = document.getElementById('amB_SaludOtroCheck').checked ?
           (document.querySelector('#amB_SaludOtro input')?.value || 'SI') : 'NO';
-        datos.situacionEconomica = this.getRadioValue('amB_Economica');
+        datos.situacion_economica = this.getRadioValue('amB_Economica');
         datos.necesidad = document.getElementById('amBNecesidad').value.trim();
-        datos.estadoCaso = document.getElementById('amBEstadoCaso').value;
-        datos.necesidadResuelta = 'NO';
-        datos.fechaResolucion = '';
-        datos.notasSeguimiento = '';
+        datos.estadoCaso = document.getElementById('amBEstadoCaso').value || 'pendiente';
       }
     } else if (tipo === 'nna') {
-      datos.repCedula = document.getElementById('nnaCedulaRep').value.trim();
-      datos.repNombre = document.getElementById('nnaNombreRep').value.trim();
-      datos.repTelefono = document.getElementById('nnaTelefonoRep').value.trim();
-      datos.repDireccion = document.getElementById('nnaDireccionRep').value.trim();
-      datos.repAutocompletado = document.getElementById('nnaNombreRep').classList.contains('autocomplete-field') ? 'SI' : 'NO';
+      datos.nna_cedula = document.getElementById('nnaCedula').value.trim();
+      datos.nna_nombre_apellido = document.getElementById('nnaNombre').value.trim();
+      datos.nna_edad = document.getElementById('nnaEdad').value;
+      datos.nna_grado = document.getElementById('nnaGrado').value;
+      datos.nna_autocompletado = document.getElementById('nnaNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
 
-      datos.nnaNombre = document.getElementById('nnaNombre').value.trim();
-      datos.nnaFechaNacimiento = document.getElementById('nnaFechaNacimiento').value;
-      datos.nnaEdad = document.getElementById('nnaEdad').value;
-      datos.nnaSexo = this.getOptionValue('nnaSexo');
-
-      datos.escolarizado = this.getOptionValue('nnaEscolarizado');
-      datos.institucion = document.getElementById('nnaInstitucion')?.value?.trim() || '';
-      datos.grado = document.getElementById('nnaGrado')?.value?.trim() || '';
-
-      datos.motivoEconomico = document.getElementById('nnaMotivo1').checked ? 'SI' : 'NO';
-      datos.motivoDiscapacidad = document.getElementById('nnaMotivo2').checked ? 'SI' : 'NO';
-      datos.motivoTrabajo = document.getElementById('nnaMotivo3').checked ? 'SI' : 'NO';
-      datos.motivoEmbarazo = document.getElementById('nnaMotivo4').checked ? 'SI' : 'NO';
-      datos.motivoViolencia = document.getElementById('nnaMotivo5').checked ? 'SI' : 'NO';
-      datos.motivoDesplazamiento = document.getElementById('nnaMotivo6').checked ? 'SI' : 'NO';
-      datos.motivoDocumentos = document.getElementById('nnaMotivo7').checked ? 'SI' : 'NO';
-      datos.motivoOtro = document.getElementById('nnaMotivoOtroCheck').checked ?
-        (document.querySelector('#nnaMotivoOtro input')?.value || 'SI') : 'NO';
-
-      datos.recibeBeneficio = this.getOptionValue('nnaBeneficio');
-      datos.tipoVivienda = this.getRadioValue('nnaVivienda');
-
-      datos.necesidad = document.getElementById('nnaNecesidad').value.trim();
-      datos.estadoCaso = document.getElementById('nnaEstadoCaso').value;
+      datos.rep_cedula = document.getElementById('repCedula').value.trim();
+      datos.rep_nombre_apellido = document.getElementById('repNombre').value.trim();
+      datos.rep_telefono = document.getElementById('repTelefono').value.trim();
+      datos.rep_parentesco = document.getElementById('repParentesco').value;
+      datos.rep_autocompletado = document.getElementById('repNombre').classList.contains('autocomplete-field') ? 'SI' : 'NO';
 
       if (!esBorrador) {
-        if (!datos.nnaNombre || !datos.nnaFechaNacimiento || !datos.nnaSexo) {
+        if (!datos.nna_nombre_apellido || !datos.nna_edad || !datos.nna_grado) {
           this.mostrarToast('Complete los datos del NNA', 'error');
           return null;
         }
-        if (parseInt(datos.nnaEdad) >= 18) {
-          this.mostrarToast('El NNA debe ser menor de 18 anos', 'error');
+        if (!datos.rep_nombre_apellido || !datos.rep_parentesco) {
+          this.mostrarToast('Complete los datos del representante', 'error');
           return null;
         }
       }
+
+      datos.doc_falta_cedula = document.getElementById('nnaDocCedula').checked ? 'SI' : 'NO';
+      datos.doc_falta_partida = document.getElementById('nnaDocPartida').checked ? 'SI' : 'NO';
+      datos.doc_falta_constancia = document.getElementById('nnaDocConstancia').checked ? 'SI' : 'NO';
+      datos.doc_otro = document.getElementById('nnaDocOtroCheck').checked ?
+        (document.querySelector('#nnaDocOtro input')?.value || 'SI') : 'NO';
+
+      datos.acceso_lejania = document.getElementById('nnaAccLejania').checked ? 'SI' : 'NO';
+      datos.acceso_transporte = document.getElementById('nnaAccTransporte').checked ? 'SI' : 'NO';
+      datos.acceso_riesgos = document.getElementById('nnaAccRiesgos').checked ? 'SI' : 'NO';
+      datos.acceso_otro = document.getElementById('nnaAccOtroCheck').checked ?
+        (document.querySelector('#nnaAccOtro input')?.value || 'SI') : 'NO';
+
+      datos.laboral_aportar = document.getElementById('nnaLabAportar').checked ? 'SI' : 'NO';
+      datos.laboral_informal = document.getElementById('nnaLabInformal').checked ? 'SI' : 'NO';
+      datos.laboral_rep = document.getElementById('nnaLabRep').checked ? 'SI' : 'NO';
+      datos.laboral_hermanos = document.getElementById('nnaLabHermanos').checked ? 'SI' : 'NO';
+      datos.laboral_otro = document.getElementById('nnaLabOtroCheck').checked ?
+        (document.querySelector('#nnaLabOtro input')?.value || 'SI') : 'NO';
+
+      datos.tutelaje_ausencia = document.getElementById('nnaTutAusencia').checked ? 'SI' : 'NO';
+      datos.tutelaje_desconocimiento = document.getElementById('nnaTutDesconocimiento').checked ? 'SI' : 'NO';
+      datos.tutelaje_acompanamiento = document.getElementById('nnaTutAcompanamiento').checked ? 'SI' : 'NO';
+      datos.tutelaje_otro = document.getElementById('nnaTutOtroCheck').checked ?
+        (document.querySelector('#nnaTutOtro input')?.value || 'SI') : 'NO';
+
+      datos.economico_utiles = document.getElementById('nnaEcoUtiles').checked ? 'SI' : 'NO';
+      datos.economico_alimentacion = document.getElementById('nnaEcoAlimentacion').checked ? 'SI' : 'NO';
+      datos.economico_deudas = document.getElementById('nnaEcoDeudas').checked ? 'SI' : 'NO';
+      datos.economico_inestabilidad = document.getElementById('nnaEcoInestabilidad').checked ? 'SI' : 'NO';
+      datos.economico_apoyo = document.getElementById('nnaEcoApoyo').checked ? 'SI' : 'NO';
+      datos.economico_otro = document.getElementById('nnaEcoOtroCheck').checked ?
+        (document.querySelector('#nnaEcoOtro input')?.value || 'SI') : 'NO';
+
+      datos.inscrito_escuela = this.getOptionValue('nnaInscrito');
+      datos.fecha_inscripcion = document.getElementById('nnaFechaInscripcion').value;
+      datos.notas_seguimiento = document.getElementById('nnaNotas').value.trim();
+      datos.estadoCaso = document.getElementById('nnaEstadoCaso').value || 'pendiente';
     }
 
     return datos;
@@ -873,7 +646,7 @@ class DiagSocialApp {
 
   getOptionValue(name) {
     const selected = document.querySelector(`[data-name="${name}"].selected-yes, [data-name="${name}"].selected-no`);
-    return selected ? selected.dataset.value : '';
+    return selected ? selected.dataset.value : 'NO';
   }
 
   getRadioValue(name) {
@@ -889,7 +662,7 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // SINCRONIZACION
+  // SINCRONIZACION CON REINTENTOS Y MANEJO DE ERRORES
   // ============================================
 
   detectarConexion() {
@@ -897,28 +670,23 @@ class DiagSocialApp {
       const online = navigator.onLine;
       const indicator = document.getElementById('statusOnline');
       const text = document.getElementById('statusText');
-
       if (indicator) indicator.className = online ? 'status-indicator online' : 'status-indicator offline';
       if (text) text.textContent = online ? 'Conectado' : 'Sin conexion';
-
       if (online) this.sincronizarAutomatica();
     };
-
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
     updateStatus();
   }
 
   async sincronizarAutomatica() {
-    if (!CONFIG.SCRIPT_URL) {
-      console.log('[Sync] URL del script no configurada');
-      return;
-    }
-
+    if (!CONFIG.SCRIPT_URL) { console.log('[Sync] URL del script no configurada'); return; }
     try {
       this.mostrarLoading('Sincronizando datos...');
       await this.descargarBaseVecinos();
       await this.enviarEncuestasPendientes();
+      await this.descargarPreguntasAdicionales();
+      await this.descargarEncuestadores();
       await this.guardarMetadato('ultima_sync', new Date().toISOString());
       this.actualizarEstadisticasMenu();
       this.mostrarToast('Sincronizacion completada', 'success');
@@ -931,108 +699,100 @@ class DiagSocialApp {
   }
 
   async sincronizarManual() {
-    if (!navigator.onLine) {
-      this.mostrarToast('No hay conexion a internet', 'warning');
-      return;
-    }
+    if (!navigator.onLine) { this.mostrarToast('No hay conexion a internet', 'warning'); return; }
     await this.sincronizarAutomatica();
   }
 
-  async sincronizarEncuestadores() {
-    if (!CONFIG.SCRIPT_URL) {
-      console.log('[Sync] URL del script no configurada');
-      return;
-    }
-
-    try {
-      this.mostrarLoading('Sincronizando encuestadores...');
-      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getEncuestadores&token=${CONFIG.TOKEN_SEGURIDAD}`);
-
-      if (!response.ok) throw new Error('Error al descargar encuestadores');
-
-      const data = await response.json();
-      if (data.success && data.encuestadores && data.encuestadores.length > 0) {
-        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
-
-        for (const enc of data.encuestadores) {
-          await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
-        }
-
-        this.encuestadores = data.encuestadores;
-        this.actualizarSelectEncuestadores();
-        this.mostrarToast(`${data.encuestadores.length} encuestadores sincronizados`, 'success');
-        console.log(`[Sync] ${data.encuestadores.length} encuestadores descargados`);
-      } else {
-        console.log('[Sync] No hay encuestadores en el servidor');
+  async fetchConReintentos(url, options = {}, maxRetries = CONFIG.MAX_SYNC_RETRIES) {
+    let lastError;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...options.headers }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const data = await response.json();
+        if (typeof data !== 'object' || data === null) throw new Error('Respuesta invalida del servidor');
+        return data;
+      } catch (error) {
+        lastError = error;
+        console.warn(`[Fetch] Intento ${i + 1} fallido:`, error.message);
+        if (i < maxRetries - 1) await new Promise(r => setTimeout(r, CONFIG.SYNC_RETRY_DELAY * (i + 1)));
       }
-    } catch (e) {
-      console.error('[Sync] Error descargando encuestadores:', e);
-      this.mostrarToast('No se pudieron sincronizar encuestadores. Modo offline.', 'warning');
-    } finally {
-      this.ocultarLoading();
     }
+    throw lastError;
   }
 
   async descargarBaseVecinos() {
     try {
-      const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getVecinos&token=${CONFIG.TOKEN_SEGURIDAD}`);
-      if (!response.ok) throw new Error('Error al descargar vecinos');
-
-      const data = await response.json();
+      const data = await this.fetchConReintentos(CONFIG.SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ token: CONFIG.TOKEN_SEGURIDAD, action: 'getVecinos' })
+      });
       if (data.success && data.vecinos) {
         await this.dbOperation('vecinos', 'readwrite', store => store.clear());
-        for (const vecino of data.vecinos) {
-          await this.dbOperation('vecinos', 'readwrite', store => store.put(vecino));
-        }
+        for (const vecino of data.vecinos) await this.dbOperation('vecinos', 'readwrite', store => store.put(vecino));
         this.baseVecinos = data.vecinos;
         await this.guardarMetadato('vecinos_fecha', new Date().toISOString());
         this.actualizarIndicadorVecinos(data.vecinos.length, new Date().toISOString());
         console.log(`[Sync] ${data.vecinos.length} vecinos descargados`);
       }
-    } catch (e) {
-      console.error('[Sync] Error descargando vecinos:', e);
-    }
+    } catch (e) { console.error('[Sync] Error descargando vecinos:', e); throw e; }
   }
 
   async enviarEncuestasPendientes() {
     try {
-      const pendientes = await this.dbOperation('encuestas', 'readonly',
-        store => store.index('estadoSync').getAll('pendiente'));
-
-      if (pendientes.length === 0) {
-        console.log('[Sync] No hay encuestas pendientes');
-        return;
-      }
-
+      const pendientes = await this.dbOperation('encuestas', 'readonly', store => store.index('estadoSync').getAll('pendiente'));
+      if (pendientes.length === 0) { console.log('[Sync] No hay encuestas pendientes'); return; }
       console.log(`[Sync] Enviando ${pendientes.length} encuestas...`);
-
+      let exitosos = 0, fallidos = 0;
       for (const encuesta of pendientes) {
         try {
-          const response = await fetch(CONFIG.SCRIPT_URL, {
+          const result = await this.fetchConReintentos(CONFIG.SCRIPT_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              token: CONFIG.TOKEN_SEGURIDAD,
-              action: 'guardarEncuesta',
-              encuesta: encuesta
-            })
+            body: JSON.stringify({ token: CONFIG.TOKEN_SEGURIDAD, action: 'guardarEncuesta', encuesta: encuesta })
           });
-
-          const result = await response.json();
           if (result.success) {
             encuesta.estadoSync = 'sincronizado';
             encuesta.fechaSincronizacion = new Date().toISOString();
             await this.dbOperation('encuestas', 'readwrite', store => store.put(encuesta));
-          } else {
-            console.error('[Sync] Error del servidor:', result.error);
-          }
-        } catch (e) {
-          console.error('[Sync] Error enviando encuesta:', e);
-        }
+            exitosos++;
+          } else { console.error('[Sync] Error del servidor:', result.error); fallidos++; }
+        } catch (e) { console.error('[Sync] Error enviando encuesta:', e); fallidos++; }
       }
-    } catch (e) {
-      console.error('[Sync] Error en envio:', e);
-    }
+      console.log(`[Sync] Resultado: ${exitosos} exitosos, ${fallidos} fallidos`);
+      if (fallidos > 0) this.mostrarToast(`${fallidos} encuestas no pudieron sincronizarse`, 'warning');
+    } catch (e) { console.error('[Sync] Error en envio:', e); throw e; }
+  }
+
+  async descargarPreguntasAdicionales() {
+    try {
+      const data = await this.fetchConReintentos(CONFIG.SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ token: CONFIG.TOKEN_SEGURIDAD, action: 'getPreguntas' })
+      });
+      if (data.success && data.preguntas) {
+        await this.dbOperation('preguntas', 'readwrite', store => store.clear());
+        for (const pregunta of data.preguntas) await this.dbOperation('preguntas', 'readwrite', store => store.put(pregunta));
+        this.preguntasAdicionales = data.preguntas;
+      }
+    } catch (e) { console.error('[Sync] Error descargando preguntas:', e); }
+  }
+
+  async descargarEncuestadores() {
+    try {
+      const data = await this.fetchConReintentos(CONFIG.SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ token: CONFIG.TOKEN_SEGURIDAD, action: 'getEncuestadores' })
+      });
+      if (data.success && data.encuestadores) {
+        await this.dbOperation('encuestadores', 'readwrite', store => store.clear());
+        for (const enc of data.encuestadores) await this.dbOperation('encuestadores', 'readwrite', store => store.put(enc));
+        this.encuestadores = data.encuestadores;
+        this.actualizarSelectEncuestadores();
+      }
+    } catch (e) { console.error('[Sync] Error descargando encuestadores:', e); }
   }
 
   async guardarMetadato(clave, valor) {
@@ -1040,101 +800,96 @@ class DiagSocialApp {
   }
 
   // ============================================
-  // SEGUIMIENTO
+  // SEGUIMIENTO DE CASOS
   // ============================================
 
   async abrirSeguimiento() {
     this.mostrarPantalla('screenSeguimiento');
-    await this.filtrarCasos();
+    await this.cargarCasos('todos');
   }
 
-  async filtrarCasos() {
+  async cargarCasos(filtro) {
     try {
-      const tipoFiltro = document.getElementById('filtroTipo').value;
-      const estadoFiltro = document.getElementById('filtroEstado').value;
-
       let casos = await this.dbOperation('encuestas', 'readonly', store => store.getAll());
       casos = casos.filter(c => c.encuestadorId === this.session.encuestadorId);
+      if (filtro === 'adultos') casos = casos.filter(c => c.tipo === 'adultos');
+      else if (filtro === 'nna') casos = casos.filter(c => c.tipo === 'nna');
+      else if (filtro === 'pendiente') casos = casos.filter(c => c.datos.estadoCaso === 'pendiente');
+      else if (filtro === 'proceso') casos = casos.filter(c => c.datos.estadoCaso === 'proceso');
+      else if (filtro === 'resuelto') casos = casos.filter(c => c.datos.estadoCaso === 'resuelto');
 
-      if (tipoFiltro) casos = casos.filter(c => c.tipo === tipoFiltro);
-      if (estadoFiltro) casos = casos.filter(c => c.datos.estadoCaso === estadoFiltro);
-
-      const contenedor = document.getElementById('listaCasos');
-
-      if (casos.length === 0) {
-        contenedor.innerHTML = '<div class="alert alert-info"><span>📋</span><span>No hay casos registrados</span></div>';
-        return;
-      }
-
+      const contenedor = document.getElementById('casosLista');
+      if (casos.length === 0) { contenedor.innerHTML = '<div class="alert alert-info">📋 No hay casos registrados</div>'; return; }
       contenedor.innerHTML = casos.map(caso => this.renderizarCaso(caso)).join('');
-    } catch (e) {
-      console.error('[Casos] Error cargando:', e);
-    }
+    } catch (e) { console.error('[Casos] Error cargando:', e); }
   }
 
   renderizarCaso(caso) {
     const estado = caso.datos.estadoCaso || 'pendiente';
-    const nombre = caso.tipo === 'adultos'
-      ? `${caso.datos.nombre || ''} ${caso.datos.apellido || ''}`
-      : caso.datos.nnaNombre || '';
+    const nombre = caso.tipo === 'adultos' ? (caso.datos.nombre_apellido || 'Sin nombre') : (caso.datos.nna_nombre_apellido || 'Sin nombre');
     const tipo = caso.tipo === 'adultos' ? '👴 Adulto Mayor' : '👦 NNA';
     const seccion = caso.seccion ? ` - Sec. ${caso.seccion}` : '';
     const fecha = this.formatearFecha(caso.fecha);
     const sync = caso.estadoSync === 'sincronizado' ? '✅' : '🔴';
-
-    return `<div class="caso-item ${estado}" onclick="app.abrirEditarCaso('${caso.id}')">
-      <div class="caso-header">
-        <span class="caso-nombre">${nombre}</span>
-        <span class="caso-estado ${estado}">${estado.toUpperCase()}</span>
-      </div>
-      <div class="caso-info">${tipo}${seccion} | ${sync} ${fecha} | ${caso.encuestador}</div>
-    </div>`;
+    return `<div class="caso-item ${estado}" onclick="app.editarCaso('${caso.id}')"><div class="caso-header"><span class="caso-nombre">${nombre}</span><span class="caso-estado ${estado}">${estado.toUpperCase()}</span></div><div class="caso-info">${tipo}${seccion} | ${sync} ${fecha} | ${caso.encuestador}</div></div>`;
   }
 
-  async abrirEditarCaso(id) {
+  filtrarCasos(filtro, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    this.cargarCasos(filtro);
+  }
+
+  async editarCaso(id) {
     try {
       const caso = await this.dbOperation('encuestas', 'readonly', store => store.get(id));
       if (!caso) return;
-
       this.casoEditando = caso;
-      const nombre = caso.tipo === 'adultos'
-        ? `${caso.datos.nombre || ''} ${caso.datos.apellido || ''}`
-        : caso.datos.nnaNombre || '';
+      const modal = document.getElementById('modalEditarCaso');
+      const titulo = document.getElementById('modalCasoTitulo');
+      const contenido = document.getElementById('modalCasoContent');
+      const nombre = caso.tipo === 'adultos' ? (caso.datos.nombre_apellido || 'Sin nombre') : (caso.datos.nna_nombre_apellido || 'Sin nombre');
+      titulo.textContent = `Editar: ${nombre}`;
 
-      document.getElementById('editarCasoSubtitle').textContent = `Editando: ${nombre}`;
-      document.getElementById('editarNecesidad').value = caso.datos.necesidad || '';
-      document.getElementById('editarEstadoCaso').value = caso.datos.estadoCaso || 'pendiente';
-      document.getElementById('editarNotas').value = caso.datos.notasSeguimiento || '';
-
-      this.mostrarPantalla('screenEditarCaso');
-    } catch (e) {
-      console.error('[Casos] Error editando:', e);
-    }
+      if (caso.tipo === 'adultos') {
+        contenido.innerHTML = `<div class="form-group"><label class="form-label">Necesidad detectada</label><textarea id="editNecesidad" class="form-textarea">${caso.datos.necesidad || ''}</textarea></div><div class="form-group"><label class="form-label">Fue resuelta la necesidad?</label><div class="option-group"><button type="button" class="option-btn ${caso.datos.necesidadResuelta === 'SI' ? 'selected-yes' : ''}" data-name="editResuelta" data-value="SI" onclick="app.selectOption(this)">SI</button><button type="button" class="option-btn ${caso.datos.necesidadResuelta === 'NO' ? 'selected-no' : ''}" data-name="editResuelta" data-value="NO" onclick="app.selectOption(this)">NO</button></div></div><div class="form-group"><label class="form-label">Fecha de resolucion</label><input type="date" id="editFechaResolucion" class="form-input" value="${caso.datos.fechaResolucion || ''}"></div><div class="form-group"><label class="form-label">Notas de seguimiento</label><textarea id="editNotas" class="form-textarea">${caso.datos.notasSeguimiento || ''}</textarea></div><div class="form-group"><label class="form-label">Estado del caso</label><select id="editEstadoCaso" class="form-select"><option value="pendiente" ${caso.datos.estadoCaso === 'pendiente' ? 'selected' : ''}>Pendiente</option><option value="proceso" ${caso.datos.estadoCaso === 'proceso' ? 'selected' : ''}>En proceso</option><option value="resuelto" ${caso.datos.estadoCaso === 'resuelto' ? 'selected' : ''}>Resuelto</option></select></div>`;
+      } else {
+        contenido.innerHTML = `<div class="form-group"><label class="form-label">Fue inscrito en la escuela?</label><div class="option-group"><button type="button" class="option-btn ${caso.datos.inscritoEscuela === 'SI' ? 'selected-yes' : ''}" data-name="editInscrito" data-value="SI" onclick="app.selectOption(this)">SI</button><button type="button" class="option-btn ${caso.datos.inscritoEscuela === 'NO' ? 'selected-no' : ''}" data-name="editInscrito" data-value="NO" onclick="app.selectOption(this)">NO</button></div></div><div class="form-group"><label class="form-label">Fecha de inscripcion</label><input type="date" id="editFechaInscripcion" class="form-input" value="${caso.datos.fechaInscripcion || ''}"></div><div class="form-group"><label class="form-label">Notas de seguimiento</label><textarea id="editNotas" class="form-textarea">${caso.datos.notasSeguimiento || ''}</textarea></div><div class="form-group"><label class="form-label">Estado del caso</label><select id="editEstadoCaso" class="form-select"><option value="pendiente" ${caso.datos.estadoCaso === 'pendiente' ? 'selected' : ''}>Pendiente</option><option value="proceso" ${caso.datos.estadoCaso === 'proceso' ? 'selected' : ''}>En proceso</option><option value="resuelto" ${caso.datos.estadoCaso === 'resuelto' ? 'selected' : ''}>Resuelto</option></select></div>`;
+      }
+      modal.classList.add('active');
+    } catch (e) { console.error('[Casos] Error editando:', e); }
   }
 
-  volverSeguimiento() {
-    this.mostrarPantalla('screenSeguimiento');
+  async guardarCasoEditado() {
+    if (!this.casoEditando) return;
+    const caso = this.casoEditando;
+    if (caso.tipo === 'adultos') {
+      caso.datos.necesidad = document.getElementById('editNecesidad').value.trim();
+      caso.datos.necesidadResuelta = this.getOptionValue('editResuelta');
+      caso.datos.fechaResolucion = document.getElementById('editFechaResolucion').value;
+      caso.datos.notasSeguimiento = document.getElementById('editNotas').value.trim();
+      caso.datos.estadoCaso = document.getElementById('editEstadoCaso').value;
+    } else {
+      caso.datos.inscritoEscuela = this.getOptionValue('editInscrito');
+      caso.datos.fechaInscripcion = document.getElementById('editFechaInscripcion').value;
+      caso.datos.notasSeguimiento = document.getElementById('editNotas').value.trim();
+      caso.datos.estadoCaso = document.getElementById('editEstadoCaso').value;
+    }
+    caso.estadoSync = 'pendiente';
+    caso.fecha = new Date().toISOString();
+    await this.dbOperation('encuestas', 'readwrite', store => store.put(caso));
+    this.cerrarModal();
+    this.mostrarToast('Caso actualizado', 'success');
+    this.cargarCasos('todos');
+  }
+
+  cerrarModal() {
+    document.getElementById('modalEditarCaso').classList.remove('active');
     this.casoEditando = null;
   }
 
-  async guardarEdicionCaso() {
-    if (!this.casoEditando) return;
-
-    const caso = this.casoEditando;
-    caso.datos.necesidad = document.getElementById('editarNecesidad').value.trim();
-    caso.datos.estadoCaso = document.getElementById('editarEstadoCaso').value;
-    caso.datos.notasSeguimiento = document.getElementById('editarNotas').value.trim();
-    caso.estadoSync = 'pendiente';
-    caso.fecha = new Date().toISOString();
-
-    await this.dbOperation('encuestas', 'readwrite', store => store.put(caso));
-    this.mostrarToast('Caso actualizado', 'success');
-    this.volverSeguimiento();
-    await this.filtrarCasos();
-  }
-
   // ============================================
-  // UTILIDADES
+  // UTILIDADES Y UI
   // ============================================
 
   async actualizarEstadisticasMenu() {
@@ -1144,33 +899,22 @@ class DiagSocialApp {
       const sincronizadas = todas.filter(e => e.estadoSync === 'sincronizado').length;
       const total = todas.length;
       const vecinos = this.baseVecinos.length;
-
       document.getElementById('statPendientes').textContent = pendientes;
       document.getElementById('statSincronizadas').textContent = sincronizadas;
       document.getElementById('statTotal').textContent = total;
       document.getElementById('statVecinos').textContent = vecinos;
       document.getElementById('statusPendientes').textContent = `🔴 ${pendientes} pendientes`;
-
       const ultimaSync = await this.dbOperation('metadatos', 'readonly', store => store.get('ultima_sync'));
-      if (ultimaSync) {
-        document.getElementById('lastSync').textContent = this.formatearFecha(ultimaSync.valor);
-      }
-    } catch (e) {
-      console.error('[Stats] Error:', e);
-    }
+      if (ultimaSync) document.getElementById('lastSync').textContent = this.formatearFecha(ultimaSync.valor);
+    } catch (e) { console.error('[Stats] Error:', e); }
   }
 
   formatearFecha(fechaISO) {
     if (!fechaISO) return 'Nunca';
     try {
       const fecha = new Date(fechaISO);
-      return fecha.toLocaleString('es-VE', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      });
-    } catch (e) {
-      return fechaISO;
-    }
+      return fecha.toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return fechaISO; }
   }
 
   mostrarToast(mensaje, tipo = 'info') {
@@ -1179,11 +923,7 @@ class DiagSocialApp {
     toast.className = `toast ${tipo}`;
     toast.textContent = mensaje;
     container.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
   }
 
   mostrarLoading(texto) {
@@ -1204,9 +944,7 @@ class DiagSocialApp {
   iniciarAutoGuardado() {
     setInterval(() => {
       if (this.currentEncuesta && (this.currentEncuesta.estadoSync === 'borrador' || !this.currentEncuesta.estadoSync)) {
-        const tipo = this.currentEncuesta.tipo;
-        const seccion = this.currentSeccion;
-        this.guardarBorrador(tipo, seccion);
+        this.guardarBorrador(this.currentEncuesta.tipo, this.currentSeccion);
       }
     }, CONFIG.BORRADOR_INTERVAL);
   }
@@ -1217,47 +955,36 @@ class DiagSocialApp {
         .then(reg => console.log('[SW] Registrado:', reg.scope))
         .catch(err => console.error('[SW] Error:', err));
     }
-
     document.addEventListener('focusin', (e) => {
-      if (e.target.tagName === 'INPUT' && e.target.type === 'number') {
-        e.target.style.fontSize = '16px';
-      }
+      if (e.target.tagName === 'INPUT' && e.target.type === 'number') e.target.style.fontSize = '16px';
     });
+    document.getElementById('loginPin')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.login(); });
+    document.getElementById('modalEditarCaso')?.addEventListener('click', (e) => { if (e.target.id === 'modalEditarCaso') this.cerrarModal(); });
+  }
 
-    document.getElementById('loginPin')?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.login();
-    });
+  validarCedulaVenezuela(cedula) {
+    if (!cedula || cedula.length < 6 || cedula.length > 9) return false;
+    if (!/^\d+$/.test(cedula)) return false;
+    return true;
   }
 
   async exportarRespaldoCSV() {
     try {
       const encuestas = await this.dbOperation('encuestas', 'readonly', store => store.getAll());
-      if (encuestas.length === 0) {
-        this.mostrarToast('No hay datos para exportar', 'warning');
-        return;
-      }
-
-      let csv = 'ID,Tipo,Seccion,Encuestador,Fecha,EstadoSync,Cedula,Nombre,Apellido,Edad\n';
+      if (encuestas.length === 0) { this.mostrarToast('No hay datos para exportar', 'warning'); return; }
+      let csv = 'ID,Tipo,Seccion,Encuestador,Fecha,EstadoSync,Cedula,Nombre\n';
       encuestas.forEach(e => {
-        const nombre = e.tipo === 'adultos'
-          ? `${e.datos.nombre || ''} ${e.datos.apellido || ''}`
-          : `${e.datos.nnaNombre || ''}`;
-        const cedula = e.tipo === 'adultos' ? (e.datos.cedula || '') : (e.datos.repCedula || '');
-        const edad = e.tipo === 'adultos' ? (e.datos.edad || '') : (e.datos.nnaEdad || '');
-        csv += `${e.id},${e.tipo},${e.seccion || ''},${e.encuestador},${e.fecha},${e.estadoSync},${cedula},"${nombre}",${edad}\n`;
+        const nombre = e.tipo === 'adultos' ? (e.datos.nombre_apellido || '') : (e.datos.nna_nombre_apellido || '');
+        const cedula = e.tipo === 'adultos' ? (e.datos.cedula || '') : (e.datos.nna_cedula || '');
+        csv += `${e.id},${e.tipo},${e.seccion || ''},${e.encuestador},${e.fecha},${e.estadoSync},${cedula},"${nombre}"\n`;
       });
-
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `respaldo_diagnostico_${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
-
       this.mostrarToast('Respaldo descargado', 'success');
-    } catch (e) {
-      console.error('[Respaldo] Error:', e);
-      this.mostrarToast('Error al exportar', 'error');
-    }
+    } catch (e) { console.error('[Respaldo] Error:', e); this.mostrarToast('Error al exportar', 'error'); }
   }
 }
 

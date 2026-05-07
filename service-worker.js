@@ -1,119 +1,76 @@
-// Service Worker - Diagnostico Social Comunitario
-// Version: 1.0.2
+// ============================================
+// SERVICE WORKER - Diagnostico Social v2.0.0
+// Offline-first caching strategy
+// ============================================
 
-const CACHE_NAME = 'diagsocial-v1.0.4';
-const BASE_PATH = '/diagnostico-social';
+const CACHE_NAME = 'diagnostico-social-v2.0.0';
 const STATIC_ASSETS = [
-  BASE_PATH + '/',
-  BASE_PATH + '/index.html',
-  BASE_PATH + '/styles.css',
-  BASE_PATH + '/app.js',
-  BASE_PATH + '/manifest.json'
+  './',
+  './index.html',
+  './app.js',
+  './styles.css',
+  './manifest.json'
 ];
 
-// Instalacion: cachear recursos estaticos
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando Service Worker v1.0.4...');
+  console.log('[SW] Instalando v2.0.0...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Cacheando recursos estaticos...');
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => {
-      return self.skipWaiting();
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(err => console.error('[SW] Error cache:', err))
   );
 });
 
-// Activacion: limpiar caches antiguas
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activando Service Worker...');
+  console.log('[SW] Activando v2.0.0...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => {
-            console.log('[SW] Eliminando cache antigua:', name);
-            return caches.delete(name);
-          })
+          .filter(name => name !== CACHE_NAME)
+          .map(name => caches.delete(name))
       );
-    }).then(() => {
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Fetch: Network-First para index.html (SIEMPRE actualizado), Cache-First para el resto
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+  const url = new URL(event.request.url);
 
-  // No interceptar peticiones a Google Apps Script
-  if (url.href.includes('script.google.com')) {
+  // No interceptar Google Apps Script (siempre online)
+  if (url.hostname.includes('google.com') || url.hostname.includes('googleusercontent.com')) {
     return;
   }
 
-  // Para index.html y navegacion: Network-First (trae version nueva si hay internet)
-  if (request.mode === 'navigate' || (request.destination === 'document' && url.pathname.endsWith('index.html'))) {
+  // Estrategia: Cache First para assets locales, Network First para APIs
+  if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset.replace('./', '/')) || 
+      url.pathname === '/' || url.pathname === '')) {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            return cachedResponse || caches.match(BASE_PATH + '/index.html');
+      caches.match(event.request).then(cached => {
+        return cached || fetch(event.request).then(response => {
+          return caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, response.clone());
+            return response;
           });
-        })
-    );
-    return;
-  }
-
-  // Para recursos estaticos (CSS, JS, manifest): Cache-First
-  if (request.destination === 'style' || request.destination === 'script' || request.destination === 'manifest') {
-    event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        return fetch(request).then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200) {
-            return networkResponse;
-          }
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-          return networkResponse;
         });
+      }).catch(() => {
+        // Fallback para navegacion
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
       })
     );
   }
 });
 
-// Sincronizacion en background
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-encuestas') {
-    console.log('[SW] Sincronizacion en background activada');
+    console.log('[SW] Background sync triggered');
     event.waitUntil(
-      self.clients.matchAll().then((clients) => {
-        clients.forEach((client) => {
-          client.postMessage({ type: 'SYNC_TRIGGERED' });
-        });
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'SYNC_REQUEST' }));
       })
     );
-  }
-});
-
-// Mensajes desde la app principal
-self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') {
-    self.skipWaiting();
   }
 });

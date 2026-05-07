@@ -4,622 +4,735 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1976d2">
-  <meta name="description" content="Aplicacion para diagnostico social comunitario - 100% offline">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Diagnostico Social Comunitario</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>">
   <link rel="stylesheet" href="styles.css">
+<base target="_blank">
 </head>
 <body>
-  <div class="app-container">
-    <div class="toast-container" id="toastContainer"></div>
-    <div class="loading-overlay hidden" id="loadingOverlay">
-      <div class="spinner"></div>
-      <p class="loading-text" id="loadingText">Cargando...</p>
-    </div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <div id="loadingText" class="loading-text">Cargando...</div>
+  </div>
 
-    <!-- ==================== LOGIN ==================== -->
-    <div class="login-screen" id="screenLogin">
-      <div class="login-card">
-        <div class="login-logo">📋</div>
-        <h1 class="login-title">Diagnostico Social</h1>
-        <p class="login-subtitle">Comunitario - 100% Offline</p>
-        <div class="form-group">
-          <label class="form-label">Encuestador</label>
-          <select class="form-select" id="loginNombre"><option value="">-- Seleccione su nombre --</option></select>
+  <!-- LOGIN -->
+  <div id="screenLogin" class="login-screen active">
+    <div class="login-card">
+      <div class="login-logo">📋</div>
+      <h1 class="login-title">Diagnostico Social</h1>
+      <p class="login-subtitle">Comunitario - 100% Offline</p>
+      <div class="form-group">
+        <label class="form-label">Encuestador</label>
+        <select id="loginNombre" class="form-select">
+          <option value="">-- Seleccione su nombre --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">PIN (4 digitos)</label>
+        <input type="password" id="loginPin" class="form-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="****">
+      </div>
+      <div class="form-group">
+        <label class="checkbox-item" style="border:none;background:transparent;padding:0;">
+          <input type="checkbox" id="loginRecordar">
+          <label>Recordar mi sesion</label>
+        </label>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="app.login()">Ingresar</button>
+      <div class="status-bar" style="margin-top:16px;border:none;background:transparent;">
+        <span id="loginDbStatus">Base vecinos: Sin datos</span>
+        <span id="statusText">Sin conexion</span>
+        <span id="statusOnline" class="status-indicator offline"></span>
+      </div>
+      <p style="text-align:center;font-size:0.75rem;color:#9e9e9e;margin-top:8px;">v2.0.0</p>
+    </div>
+  </div>
+
+  <!-- MENU -->
+  <div id="screenMenu" class="screen hidden">
+    <div class="app-header">
+      <h1>📋 Diagnostico Social</h1>
+      <div class="subtitle" id="menuEncuestador">Bienvenido</div>
+    </div>
+    <div class="status-bar">
+      <span id="statusText">Sin conexion</span>
+      <span id="statusOnline" class="status-indicator offline"></span>
+    </div>
+    <div style="padding:16px;">
+      <div class="menu-stats">
+        <div class="stat-card warning"><div class="stat-value" id="statPendientes">0</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat-card success"><div class="stat-value" id="statSincronizadas">0</div><div class="stat-label">Sincronizadas</div></div>
+        <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-value" id="statVecinos">0</div><div class="stat-label">Vecinos</div></div>
+      </div>
+      <div style="font-size:0.8rem;color:#616161;margin-bottom:16px;text-align:center;">
+        <span id="statusPendientes">🔴 0 pendientes</span> | 📡 Ultima sync: <span id="lastSync">Nunca</span><br>
+        📊 Base vecinos: <span id="lastVecinosUpdate">Sin datos</span>
+      </div>
+      <div class="menu-grid">
+        <div class="menu-item" onclick="app.abrirFormulario('adultos')">
+          <span class="menu-item-icon">👴</span>
+          <div class="menu-item-title">Adultos Mayores</div>
+          <div class="menu-item-desc">Verificacion y registro</div>
         </div>
-        <div class="form-group">
-          <label class="form-label">PIN (4 digitos)</label>
-          <input type="password" class="form-input" id="loginPin" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="****" autocomplete="off">
+        <div class="menu-item" onclick="app.abrirFormulario('nna')">
+          <span class="menu-item-icon">👦</span>
+          <div class="menu-item-title">NNA No Escolarizados</div>
+          <div class="menu-item-desc">Registro de casos</div>
         </div>
-        <div class="form-group">
-          <label class="checkbox-item" style="border:none; padding-left:0;">
-            <input type="checkbox" id="loginRecordar">
-            <label for="loginRecordar">Recordar mi sesion</label>
-          </label>
+        <div class="menu-item" onclick="app.abrirSeguimiento()">
+          <span class="menu-item-icon">📋</span>
+          <div class="menu-item-title">Mis Casos</div>
+          <div class="menu-item-desc">Seguimiento y edicion</div>
         </div>
-        <button class="btn btn-primary btn-lg" id="btnLogin" onclick="app.login()">
-          <span class="btn-icon">🔐</span> Iniciar Sesion
-        </button>
-        <div class="form-hint" style="text-align:center; margin-top:var(--spacing-md);">
-          <span id="loginVersion">v1.0.5</span> | <span id="loginDbStatus">Base vecinos: Sin datos</span>
+        <div class="menu-item" onclick="app.abrirConfiguracion()">
+          <span class="menu-item-icon">⚙️</span>
+          <div class="menu-item-title">Configuracion</div>
+          <div class="menu-item-desc">Datos geograficos</div>
         </div>
+      </div>
+      <div class="btn-group" style="margin-top:24px;">
+        <button class="btn btn-success" onclick="app.sincronizarManual()">📡 Sincronizar</button>
+        <button class="btn btn-secondary" onclick="app.exportarRespaldoCSV()">💾 Respaldo CSV</button>
+      </div>
+      <button class="btn btn-outline" style="margin-top:12px;" onclick="app.cerrarSesion()">🚪 Cerrar Sesion</button>
+    </div>
+  </div>
+
+  <!-- CONFIGURACION -->
+  <div id="screenConfig" class="screen hidden">
+    <div class="app-header">
+      <h1>⚙️ Configuracion</h1>
+      <div class="subtitle">Datos geograficos del area</div>
+    </div>
+    <div style="padding:16px;">
+      <div class="alert alert-info">📍 Ubicacion del trabajo<br>Estos datos se autocompletaran en cada encuesta.</div>
+      <div class="form-group">
+        <label class="form-label">Estado <span class="required">*</span></label>
+        <input type="text" id="cfgEstado" class="form-input" placeholder="Ej: Miranda">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Municipio <span class="required">*</span></label>
+        <input type="text" id="cfgMunicipio" class="form-input" placeholder="Ej: Baruta">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Parroquia <span class="required">*</span></label>
+        <input type="text" id="cfgParroquia" class="form-input" placeholder="Ej: El Cafetal">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Circuito Comunal / Comuna</label>
+        <input type="text" id="cfgCircuito" class="form-input" placeholder="Ej: Circuito 1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Consejo Comunal <span class="required">*</span></label>
+        <input type="text" id="cfgConsejo" class="form-input" placeholder="Ej: Consejo Comunal XYZ">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Calle / Avenida <span class="required">*</span></label>
+        <input type="text" id="cfgCalle" class="form-input" placeholder="Ej: Av. Principal">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="app.guardarConfiguracion()">Guardar</button>
+        <button class="btn btn-secondary" onclick="app.volverMenu()">Volver</button>
       </div>
     </div>
+  </div>
 
-    <!-- ==================== MENU ==================== -->
-    <div class="screen hidden" id="screenMenu">
-      <div class="app-header">
-        <h1>📋 Diagnostico Social</h1>
-        <p class="subtitle" id="menuEncuestador">Bienvenido</p>
-      </div>
-      <div class="status-bar">
-        <div class="status-item">
-          <span class="status-indicator offline" id="statusOnline"></span>
-          <span id="statusText">Sin conexion</span>
-        </div>
-        <div class="status-item"><span id="statusPendientes">🔴 0 pendientes</span></div>
-      </div>
-      <div class="menu-content">
-        <div class="menu-stats">
-          <div class="stat-card warning">
-            <div class="stat-value" id="statPendientes">0</div>
-            <div class="stat-label">Pendientes sync</div>
-          </div>
-          <div class="stat-card success">
-            <div class="stat-value" id="statSincronizadas">0</div>
-            <div class="stat-label">Sincronizadas</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="statTotal">0</div>
-            <div class="stat-label">Total encuestas</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="statVecinos">0</div>
-            <div class="stat-label">Vecinos en DB</div>
-          </div>
-        </div>
-        <div class="alert alert-info" id="alertSync"><span>📡</span><span>Ultima sincronizacion: <strong id="lastSync">Nunca</strong></span></div>
-        <div class="alert alert-info" id="alertVecinos"><span>📊</span><span>Base vecinos: <strong id="lastVecinosUpdate">Sin datos</strong></span></div>
-        <div class="menu-grid">
-          <div class="menu-item" onclick="app.abrirFormulario('adultos')">
-            <span class="menu-item-icon">👴</span>
-            <div class="menu-item-title">Adultos Mayores</div>
-            <div class="menu-item-desc">Verificacion y registro</div>
-          </div>
-          <div class="menu-item" onclick="app.abrirFormulario('nna')">
-            <span class="menu-item-icon">👦</span>
-            <div class="menu-item-title">NNA</div>
-            <div class="menu-item-desc">No escolarizados</div>
-          </div>
-          <div class="menu-item" onclick="app.abrirSeguimiento()">
-            <span class="menu-item-icon">📋</span>
-            <div class="menu-item-title">Mis Casos</div>
-            <div class="menu-item-desc">Seguimiento</div>
-          </div>
-          <div class="menu-item" onclick="app.abrirConfiguracion()">
-            <span class="menu-item-icon">⚙️</span>
-            <div class="menu-item-title">Configuracion</div>
-            <div class="menu-item-desc">Datos geograficos</div>
-          </div>
-        </div>
-        <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
-          <button class="btn btn-secondary" onclick="app.sincronizarManual()"><span class="btn-icon">🔄</span> Sincronizar ahora</button>
-          <button class="btn btn-outline" onclick="app.cerrarSesion()"><span class="btn-icon">🚪</span> Cerrar sesion</button>
-        </div>
-      </div>
+  <!-- ADULTOS MAYORES -->
+  <div id="screenAdultos" class="screen hidden">
+    <div class="app-header">
+      <h1>👴 Adultos Mayores</h1>
+      <div class="subtitle" id="adultosSubtitle">Datos personales</div>
     </div>
-
-    <!-- ==================== CONFIGURACION ==================== -->
-    <div class="screen hidden" id="screenConfig">
-      <div class="app-header">
-        <h1>⚙️ Configuracion</h1>
-        <p class="subtitle">Datos geograficos del area</p>
+    <div style="padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span id="gpsAdultos" class="gps-indicator obtaining">📡 Obteniendo GPS...</span>
+        <span id="adultosPaso" style="font-size:0.8rem;color:#616161;">Paso 1 de 3</span>
       </div>
-      <div class="screen-content">
+      <div class="progress-bar"><div id="progressAdultos" class="progress-fill" style="width:33%"></div></div>
+      <div id="progressTextAdultos" class="progress-text">Paso 1 de 3: Datos personales</div>
+
+      <!-- PASO 1: DATOS PERSONALES -->
+      <div id="pasoAdultos1">
         <div class="card">
-          <div class="card-title">Ubicacion del trabajo</div>
-          <div class="card-subtitle">Estos datos se autocompletaran en cada encuesta. Puede editarlos si cambia de sector.</div>
+          <div class="card-title">🔍 Busqueda por Cedula</div>
           <div class="form-group">
-            <label class="form-label">Estado <span class="required">*</span></label>
-            <input type="text" class="form-input" id="cfgEstado" placeholder="Ej: Miranda">
+            <label class="form-label">Cedula de identidad <span class="required">*</span></label>
+            <input type="text" id="amCedula" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 12345678" oninput="app.buscarVecino('am')">
+            <div class="form-hint">Escriba al menos 6 digitos para buscar</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Municipio <span class="required">*</span></label>
-            <input type="text" class="form-input" id="cfgMunicipio" placeholder="Ej: Sucre">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Parroquia <span class="required">*</span></label>
-            <input type="text" class="form-input" id="cfgParroquia" placeholder="Ej: Petare">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Circuito Comunal / Comuna</label>
-            <input type="text" class="form-input" id="cfgCircuito" placeholder="Ej: Comuna Socialista El Llanito">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Consejo Comunal <span class="required">*</span></label>
-            <input type="text" class="form-input" id="cfgConsejo" placeholder="Ej: Consejo Comunal La Esperanza">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Calle / Avenida <span class="required">*</span></label>
-            <input type="text" class="form-input" id="cfgCalle" placeholder="Ej: Av. Principal de La Vega">
-          </div>
-        </div>
-        <div class="btn-group">
-          <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
-          <button class="btn btn-primary" onclick="app.guardarConfiguracion()">💾 Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== ADULTOS MAYORES ==================== -->
-    <div class="screen hidden" id="screenAdultos">
-      <div class="app-header">
-        <h1>👴 Adultos Mayores</h1>
-        <p class="subtitle" id="adultosSubtitle">Datos personales</p>
-      </div>
-      <div class="status-bar">
-        <div class="status-item">
-          <span class="gps-indicator obtaining" id="gpsAdultos"><span class="status-indicator syncing"></span> Obteniendo GPS...</span>
-        </div>
-        <div class="status-item" id="adultosPaso">Paso 1 de 3</div>
-      </div>
-      <div class="screen-content">
-        <div class="progress-bar"><div class="progress-fill" id="progressAdultos" style="width:33%"></div></div>
-        <p class="progress-text" id="progressTextAdultos">Paso 1 de 3: Datos personales</p>
-
-        <div id="pasoAdultos1">
-          <div class="card">
-            <div class="card-title">🔍 Busqueda por Cedula</div>
-            <div class="form-group">
-              <label class="form-label">Cedula de identidad <span class="required">*</span></label>
-              <input type="number" class="form-input" id="amCedula" placeholder="Ingrese numero de cedula" inputmode="numeric" oninput="app.buscarVecino('am')">
-              <p class="form-hint">Escriba al menos 6 digitos para buscar</p>
-            </div>
-            <div id="amBusquedaResultado"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">👤 Datos Personales</div>
-            <div class="form-group">
-              <label class="form-label">Nombre <span class="required">*</span></label>
-              <input type="text" class="form-input" id="amNombre" placeholder="Nombre del encuestado">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Apellido <span class="required">*</span></label>
-              <input type="text" class="form-input" id="amApellido" placeholder="Apellido del encuestado">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
-              <input type="date" class="form-input" id="amFechaNacimiento" onchange="app.calcularEdad('am')">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Edad (calculada automaticamente)</label>
-              <input type="number" class="form-input" id="amEdad" placeholder="Edad" readonly style="background:#f5f5f5;">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Telefono</label>
-              <input type="tel" class="form-input" id="amTelefono" placeholder="Ej: 0412-1234567">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Sector</label>
-              <input type="text" class="form-input" id="amSector" placeholder="Sector donde reside">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Calle o Avenida</label>
-              <input type="text" class="form-input" id="amCalle" placeholder="Calle o avenida">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Nro. de Casa</label>
-              <input type="text" class="form-input" id="amNroCasa" placeholder="Numero de casa">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Referencia</label>
-              <input type="text" class="form-input" id="amReferencia" placeholder="Punto de referencia cercano">
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
-            <button class="btn btn-primary" onclick="app.adultosSiguiente(2)">Siguiente →</button>
-          </div>
-        </div>
-
-        <div id="pasoAdultos2" class="hidden">
-          <div class="card">
-            <div class="card-title">📋 Seleccione el tipo de registro</div>
-            <div class="card-subtitle">Elija la seccion segun si el adulto mayor ya esta en el listado previo</div>
-            <div class="btn-group-vertical" style="margin-top:var(--spacing-lg);">
-              <button class="btn btn-primary btn-lg" onclick="app.seleccionarSeccionAdultos('A')" style="text-align:left; justify-content:flex-start;">
-                <span class="btn-icon">✅</span>
-                <div style="text-align:left;"><div style="font-weight:700;">Seccion A - Verificacion</div><div style="font-size:0.85rem; font-weight:400; opacity:0.9;">Ya esta en listado previo de vulnerabilidad</div></div>
-              </button>
-              <button class="btn btn-outline btn-lg" onclick="app.seleccionarSeccionAdultos('B')" style="text-align:left; justify-content:flex-start;">
-                <span class="btn-icon">📝</span>
-                <div style="text-align:left;"><div style="font-weight:700;">Seccion B - Registro Nuevo</div><div style="font-size:0.85rem; font-weight:400; opacity:0.9;">NO esta en el listado previo</div></div>
-              </button>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.adultosAnterior(1)">← Anterior</button>
-            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Guardar borrador</button>
-          </div>
-        </div>
-
-        <div id="pasoAdultos3A" class="hidden">
-          <div class="card">
-            <div class="card-title">✅ Seccion A - Verificacion</div>
-            <div class="card-subtitle">Adulto mayor YA en listado de vulnerabilidad</div>
-            <div class="form-section">
-              <div class="form-group">
-                <label class="form-label">1. Actualmente usted vive solo/a?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="amViveSolo" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="amViveSolo" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">2. Es sosten de hogar?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="amSosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="amSosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">3. Los ingresos familiares actuales le permiten cubrir sus necesidades basicas?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="amIngresos" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="amIngresos" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">4. Tiene alguna condicion de salud que genere alta dependencia fisica?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">📋 Seguimiento del caso</div>
-            <div class="form-group">
-              <label class="form-label">Necesidad detectada</label>
-              <textarea class="form-textarea" id="amNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Estado del caso</label>
-              <select class="form-select" id="amEstadoCaso">
-                <option value="pendiente">🔴 Pendiente</option>
-                <option value="proceso">🟡 En proceso</option>
-                <option value="resuelto">🟢 Resuelto</option>
-              </select>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">← Anterior</button>
-            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Borrador</button>
-            <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'A')">✅ Guardar y finalizar</button>
-          </div>
-        </div>
-
-        <div id="pasoAdultos3B" class="hidden">
-          <div class="card">
-            <div class="card-title">📝 Seccion B - Registro Nuevo</div>
-            <div class="card-subtitle">Adulto mayor NO en listado previo</div>
-            <div class="form-section">
-              <div class="section-title">1. Situacion del nucleo familiar</div>
-              <div class="form-group">
-                <label class="form-label">a) Es sosten de hogar?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="amB_Sosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="amB_Sosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">b) Actualmente vive solo/a o comparte vivienda?</label>
-                <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')"><input type="radio" name="amB_Vivienda" value="solo"><label>Vive completamente solo/a</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')"><input type="radio" name="amB_Vivienda" value="familiares"><label>Comparte con familiares</label></div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">c) Cantidad de miembros del grupo familiar</label>
-                <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="1-3"><label>1-3 personas</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="3-5"><label>3-5 personas</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')"><input type="radio" name="amB_Miembros" value="5+"><label>Mayor a 5 personas</label></div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">d) Miembros del grupo que perciben ingresos</label>
-                <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="1"><label>1</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="2"><label>2</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')"><input type="radio" name="amB_IngresosMiembro" value="2+"><label>Mas de 2</label></div>
-                </div>
-              </div>
-            </div>
-            <div class="form-section">
-              <div class="section-title">2. Salud (seleccione todas las que apliquen)</div>
-              <div class="checkbox-group">
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Encamado" value="SI"><label for="amB_Encamado">Encamado/a</label></div>
-                <div style="padding-left:var(--spacing-md); font-weight:600; margin:var(--spacing-sm) 0;">Enfermedades Neurodegenerativas:</div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Parkinson" value="SI"><label for="amB_Parkinson">Parkinson</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Alzheimer" value="SI"><label for="amB_Alzheimer">Alzheimer</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Trastorno" value="SI"><label for="amB_Trastorno">Trastorno Neurocognitivo Mayor (demencia)</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_InsufRenal" value="SI"><label for="amB_InsufRenal">Insuficiencia Renal (dialisis)</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Cancer" value="SI"><label for="amB_Cancer">Cancer</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_InsufCardiaca" value="SI"><label for="amB_InsufCardiaca">Insuficiencia Cardiaca</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Artritis" value="SI"><label for="amB_Artritis">Artritis Reumatoidea</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_Esclerosis" value="SI"><label for="amB_Esclerosis">Esclerosis Multiple</label></div>
-                <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="amB_SaludOtroCheck" value="SI" onchange="app.toggleOtro('amB_SaludOtro')"><label for="amB_SaludOtroCheck">Otro</label></div>
-                <div class="form-group hidden" id="amB_SaludOtro"><input type="text" class="form-input" placeholder="Especifique otra condicion"></div>
-              </div>
-            </div>
-            <div class="form-section">
-              <div class="section-title">3. Situacion Economica</div>
-              <div class="radio-group">
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="todo"><label>Si, alcanzan para todo lo necesario</label></div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="estricto"><label>Permiten cubrir lo estrictamente necesario</label></div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="no_basico"><label>No alcanzan para cubrir lo basico</label></div>
-                <div class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')"><input type="radio" name="amB_Economica" value="dependencia"><label>Depende totalmente de ayuda externa</label></div>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">📋 Seguimiento del caso</div>
-            <div class="form-group">
-              <label class="form-label">Necesidad detectada</label>
-              <textarea class="form-textarea" id="amBNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Estado del caso</label>
-              <select class="form-select" id="amBEstadoCaso">
-                <option value="pendiente">🔴 Pendiente</option>
-                <option value="proceso">🟡 En proceso</option>
-                <option value="resuelto">🟢 Resuelto</option>
-              </select>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">← Anterior</button>
-            <button class="btn btn-secondary" onclick="app.guardarBorrador('adultos')">💾 Borrador</button>
-            <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'B')">✅ Guardar y finalizar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== NNA ==================== -->
-    <div class="screen hidden" id="screenNNA">
-      <div class="app-header">
-        <h1>👦 NNA No Escolarizados</h1>
-        <p class="subtitle" id="nnaSubtitle">Datos personales</p>
-      </div>
-      <div class="status-bar">
-        <div class="status-item">
-          <span class="gps-indicator obtaining" id="gpsNNA"><span class="status-indicator syncing"></span> Obteniendo GPS...</span>
-        </div>
-        <div class="status-item" id="nnaPaso">Paso 1 de 2</div>
-      </div>
-      <div class="screen-content">
-        <div class="progress-bar"><div class="progress-fill" id="progressNNA" style="width:50%"></div></div>
-        <p class="progress-text" id="progressTextNNA">Paso 1 de 2: Datos personales</p>
-
-        <div id="pasoNNA1">
-          <div class="card">
-            <div class="card-title">🔍 Busqueda por Cedula (Representante)</div>
-            <div class="form-group">
-              <label class="form-label">Cedula del representante <span class="required">*</span></label>
-              <input type="number" class="form-input" id="nnaCedulaRep" placeholder="Ingrese cedula del representante" inputmode="numeric" oninput="app.buscarVecino('nna')">
-              <p class="form-hint">Escriba al menos 6 digitos para buscar</p>
-            </div>
-            <div id="nnaBusquedaResultado"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">👤 Datos del Representante</div>
-            <div class="form-group">
-              <label class="form-label">Nombre y Apellido <span class="required">*</span></label>
-              <input type="text" class="form-input" id="nnaNombreRep" placeholder="Nombre completo del representante">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Telefono</label>
-              <input type="tel" class="form-input" id="nnaTelefonoRep" placeholder="Ej: 0412-1234567">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Direccion</label>
-              <input type="text" class="form-input" id="nnaDireccionRep" placeholder="Direccion completa">
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">👶 Datos del NNA</div>
-            <div class="form-group">
-              <label class="form-label">Nombre y Apellido del NNA <span class="required">*</span></label>
-              <input type="text" class="form-input" id="nnaNombre" placeholder="Nombre completo del nino/a">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Fecha de Nacimiento <span class="required">*</span></label>
-              <input type="date" class="form-input" id="nnaFechaNacimiento" onchange="app.calcularEdad('nna')">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Edad (calculada automaticamente)</label>
-              <input type="number" class="form-input" id="nnaEdad" placeholder="Edad" readonly style="background:#f5f5f5;">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Sexo <span class="required">*</span></label>
-              <div class="option-group">
-                <button type="button" class="option-btn" data-name="nnaSexo" data-value="M" onclick="app.selectOption(this)">Masculino</button>
-                <button type="button" class="option-btn" data-name="nnaSexo" data-value="F" onclick="app.selectOption(this)">Femenino</button>
-              </div>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.volverMenu()">← Cancelar</button>
-            <button class="btn btn-primary" onclick="app.nnaSiguiente(2)">Siguiente →</button>
-          </div>
-        </div>
-
-        <div id="pasoNNA2" class="hidden">
-          <div class="card">
-            <div class="card-title">📋 Situacion de Escolarizacion</div>
-            <div class="form-section">
-              <div class="form-group">
-                <label class="form-label">1. El NNA actualmente esta escolarizado?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="nnaEscolarizado" data-value="SI" onclick="app.selectOption(this); app.toggleEscolarizacion(true)">SI</button>
-                  <button type="button" class="option-btn" data-name="nnaEscolarizado" data-value="NO" onclick="app.selectOption(this); app.toggleEscolarizacion(false)">NO</button>
-                </div>
-              </div>
-              <div id="nnaEscolarizacionDetalle" class="hidden">
-                <div class="form-group">
-                  <label class="form-label">Nombre de la institucion</label>
-                  <input type="text" class="form-input" id="nnaInstitucion" placeholder="Nombre de la escuela/institucion">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Grado o ano que cursa</label>
-                  <input type="text" class="form-input" id="nnaGrado" placeholder="Ej: 3er grado, 1er ano">
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">2. Motivo de no escolarizacion (si aplica)</label>
-                <div class="checkbox-group">
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo1" value="economico"><label for="nnaMotivo1">Razones economicas</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo2" value="discapacidad"><label for="nnaMotivo2">Discapacidad o condicion de salud</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo3" value="trabajo"><label for="nnaMotivo3">Trabajo infantil</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo4" value="embarazo"><label for="nnaMotivo4">Embarazo adolescente</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo5" value="violencia"><label for="nnaMotivo5">Violencia o inseguridad</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo6" value="desplazamiento"><label for="nnaMotivo6">Desplazamiento o migracion</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivo7" value="falta_documentos"><label for="nnaMotivo7">Falta de documentos</label></div>
-                  <div class="checkbox-item" onclick="app.toggleCheckbox(this)"><input type="checkbox" id="nnaMotivoOtroCheck" value="otro" onchange="app.toggleOtro('nnaMotivoOtro')"><label for="nnaMotivoOtroCheck">Otro</label></div>
-                  <div class="form-group hidden" id="nnaMotivoOtro"><input type="text" class="form-input" placeholder="Especifique otro motivo"></div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">3. El NNA recibe algun tipo de proteccion o beneficio social?</label>
-                <div class="option-group">
-                  <button type="button" class="option-btn" data-name="nnaBeneficio" data-value="SI" onclick="app.selectOption(this)">SI</button>
-                  <button type="button" class="option-btn" data-name="nnaBeneficio" data-value="NO" onclick="app.selectOption(this)">NO</button>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">4. Tipo de vivienda</label>
-                <div class="radio-group">
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="propia"><label>Propia</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="alquilada"><label>Alquilada</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="prestada"><label>Prestada/Invadida</label></div>
-                  <div class="radio-item" onclick="app.selectRadio(this, 'nnaVivienda')"><input type="radio" name="nnaVivienda" value="otra"><label>Otra</label></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title">📋 Seguimiento del caso</div>
-            <div class="form-group">
-              <label class="form-label">Necesidad detectada</label>
-              <textarea class="form-textarea" id="nnaNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Estado del caso</label>
-              <select class="form-select" id="nnaEstadoCaso">
-                <option value="pendiente">🔴 Pendiente</option>
-                <option value="proceso">🟡 En proceso</option>
-                <option value="resuelto">🟢 Resuelto</option>
-              </select>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="app.nnaAnterior(1)">← Anterior</button>
-            <button class="btn btn-secondary" onclick="app.guardarBorrador('nna')">💾 Borrador</button>
-            <button class="btn btn-success" onclick="app.guardarEncuesta('nna')">✅ Guardar y finalizar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== SEGUIMIENTO ==================== -->
-    <div class="screen hidden" id="screenSeguimiento">
-      <div class="app-header">
-        <h1>📋 Mis Casos</h1>
-        <p class="subtitle">Seguimiento de encuestas</p>
-      </div>
-      <div class="screen-content" style="padding:var(--spacing-md);">
-        <div class="card">
-          <div class="card-title">Filtros</div>
-          <div class="form-group">
-            <label class="form-label">Tipo de encuesta</label>
-            <select class="form-select" id="filtroTipo" onchange="app.filtrarCasos()">
-              <option value="">Todas</option>
-              <option value="adultos">Adultos Mayores</option>
-              <option value="nna">NNA</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Estado</label>
-            <select class="form-select" id="filtroEstado" onchange="app.filtrarCasos()">
-              <option value="">Todos</option>
-              <option value="pendiente">🔴 Pendiente</option>
-              <option value="proceso">🟡 En proceso</option>
-              <option value="resuelto">🟢 Resuelto</option>
-            </select>
-          </div>
-        </div>
-        <div id="listaCasos" style="margin-top:var(--spacing-md);">
-          <div class="alert alert-info"><span>📋</span><span>No hay casos registrados</span></div>
-        </div>
-        <div class="btn-group" style="margin-top:var(--spacing-lg);">
-          <button class="btn btn-secondary" onclick="app.volverMenu()">← Volver al menu</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================== EDITAR CASO ==================== -->
-    <div class="screen hidden" id="screenEditarCaso">
-      <div class="app-header">
-        <h1>✏️ Editar Caso</h1>
-        <p class="subtitle" id="editarCasoSubtitle">Actualizar seguimiento</p>
-      </div>
-      <div class="screen-content">
-        <div class="card">
-          <div class="card-title">Informacion del caso</div>
-          <div id="editarCasoInfo"></div>
+          <div id="amBusquedaResultado"></div>
         </div>
         <div class="card">
-          <div class="card-title">Actualizar seguimiento</div>
+          <div class="card-title">👤 Datos Personales</div>
+          <div class="form-group">
+            <label class="form-label">Nombre y Apellido <span class="required">*</span></label>
+            <input type="text" id="amNombre" class="form-input" placeholder="Ej: Maria Perez">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Telefono</label>
+            <input type="tel" id="amTelefono" class="form-input" placeholder="Ej: 04141234567">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sector</label>
+            <input type="text" id="amSector" class="form-input" placeholder="Ej: Sector A">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Calle o Avenida</label>
+            <input type="text" id="amCalle" class="form-input" placeholder="Ej: Av. Principal">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nro. de Casa</label>
+            <input type="text" id="amNroCasa" class="form-input" placeholder="Ej: 123">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Referencia</label>
+            <input type="text" id="amReferencia" class="form-input" placeholder="Ej: Frente a la panaderia">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="app.adultosSiguiente(2)">Siguiente ➡️</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="app.volverMenu()">Volver al Menu</button>
+      </div>
+
+      <!-- PASO 2: SELECCION DE SECCION -->
+      <div id="pasoAdultos2" class="hidden">
+        <div class="card">
+          <div class="card-title">📋 Seleccione el tipo de registro</div>
+          <div class="card-subtitle">Elija la seccion segun si el adulto mayor ya esta en el listado previo</div>
+          <div class="btn-group-vertical" style="margin-top:16px;">
+            <button class="btn btn-outline" onclick="app.seleccionarSeccionAdultos('A')">
+              ✅ Seccion A - Verificacion<br>
+              <small style="font-weight:normal;">Adulto mayor YA en listado de vulnerabilidad</small>
+            </button>
+            <button class="btn btn-outline" style="margin-top:12px;" onclick="app.seleccionarSeccionAdultos('B')">
+              📝 Seccion B - Registro Nuevo<br>
+              <small style="font-weight:normal;">Adulto mayor NO en listado previo</small>
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="app.adultosAnterior(1)">⬅️ Anterior</button>
+      </div>
+
+      <!-- PASO 3A: SECCION A - VERIFICACION -->
+      <div id="pasoAdultos3A" class="hidden">
+        <div class="card">
+          <div class="card-title">✅ Verificacion Rapida</div>
+          <div class="form-group">
+            <label class="form-label">1. Actualmente usted vive solo/a?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="amViveSolo" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="amViveSolo" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">2. Es sosten de hogar?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="amSosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="amSosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">3. Los ingresos familiares actuales le permiten cubrir sus necesidades basicas?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="amIngresos" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="amIngresos" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">4. Tiene alguna condicion de salud que genere alta dependencia fisica?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 Seguimiento del caso</div>
           <div class="form-group">
             <label class="form-label">Necesidad detectada</label>
-            <textarea class="form-textarea" id="editarNecesidad" placeholder="Describa la necesidad principal detectada"></textarea>
+            <textarea id="amNecesidad" class="form-textarea" placeholder="Describa la necesidad identificada..."></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Estado del caso</label>
-            <select class="form-select" id="editarEstadoCaso">
-              <option value="pendiente">🔴 Pendiente</option>
-              <option value="proceso">🟡 En proceso</option>
-              <option value="resuelto">🟢 Resuelto</option>
+            <select id="amEstadoCaso" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="proceso">En proceso</option>
+              <option value="resuelto">Resuelto</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Notas de seguimiento</label>
-            <textarea class="form-textarea" id="editarNotas" placeholder="Notas adicionales sobre el seguimiento"></textarea>
           </div>
         </div>
         <div class="btn-group">
-          <button class="btn btn-secondary" onclick="app.volverSeguimiento()">← Cancelar</button>
-          <button class="btn btn-primary" onclick="app.guardarEdicionCaso()">💾 Guardar cambios</button>
+          <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'A')">💾 Guardar Encuesta</button>
+          <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">⬅️ Anterior</button>
+        </div>
+      </div>
+
+      <!-- PASO 3B: SECCION B - REGISTRO NUEVO -->
+      <div id="pasoAdultos3B" class="hidden">
+        <div class="card">
+          <div class="card-title">1. Situacion del nucleo familiar</div>
+          <div class="form-group">
+            <label class="form-label">a) Es sosten de hogar?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="amB_Sosten" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="amB_Sosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">b) Actualmente vive solo/a o comparte vivienda?</label>
+            <div class="radio-group">
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
+                <input type="radio" name="amB_Vivienda" value="solo">
+                <label>Vive completamente solo/a</label>
+              </label>
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_Vivienda')">
+                <input type="radio" name="amB_Vivienda" value="familiares">
+                <label>Comparte con familiares</label>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">c) Cantidad de miembros del grupo familiar</label>
+            <div class="radio-group">
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                <input type="radio" name="amB_Miembros" value="1-3">
+                <label>1-3 personas</label>
+              </label>
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                <input type="radio" name="amB_Miembros" value="3-5">
+                <label>3-5 personas</label>
+              </label>
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_Miembros')">
+                <input type="radio" name="amB_Miembros" value="5+">
+                <label>Mayor a 5</label>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">d) Miembros del grupo que perciben ingresos</label>
+            <div class="radio-group">
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                <input type="radio" name="amB_IngresosMiembro" value="1">
+                <label>1</label>
+              </label>
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                <input type="radio" name="amB_IngresosMiembro" value="2">
+                <label>2</label>
+              </label>
+              <label class="radio-item" onclick="app.selectRadio(this, 'amB_IngresosMiembro')">
+                <input type="radio" name="amB_IngresosMiembro" value="mas2">
+                <label>Mas de 2</label>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2. Salud (seleccione todas las que apliquen)</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Encamado">
+              <label>Encamado/a</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Parkinson">
+              <label>Parkinson</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Alzheimer">
+              <label>Alzheimer</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Trastorno">
+              <label>Trastorno Neurocognitivo Mayor (demencia)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_InsufRenal">
+              <label>Insuficiencia Renal (dialisis)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Cancer">
+              <label>Cancer</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_InsufCardiaca">
+              <label>Insuficiencia Cardiaca</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Artritis">
+              <label>Artritis Reumatoidea</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_Esclerosis">
+              <label>Esclerosis Multiple</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amB_SaludOtroCheck" onchange="app.toggleOtro('amB_SaludOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="amB_SaludOtro" class="hidden" style="margin-top:8px;">
+              <input type="text" class="form-input" placeholder="Especifique...">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">3. Situacion Economica</div>
+          <div class="radio-group">
+            <label class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+              <input type="radio" name="amB_Economica" value="todo">
+              <label>Si, alcanzan para cubrir todo lo necesario</label>
+            </label>
+            <label class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+              <input type="radio" name="amB_Economica" value="estricto">
+              <label>Permiten cubrir lo estrictamente necesario</label>
+            </label>
+            <label class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+              <input type="radio" name="amB_Economica" value="no_basico">
+              <label>No alcanzan para cubrir lo basico</label>
+            </label>
+            <label class="radio-item" onclick="app.selectRadio(this, 'amB_Economica')">
+              <input type="radio" name="amB_Economica" value="depende">
+              <label>Depende totalmente de ayuda externa</label>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📋 Seguimiento del caso</div>
+          <div class="form-group">
+            <label class="form-label">Necesidad detectada</label>
+            <textarea id="amBNecesidad" class="form-textarea" placeholder="Describa la necesidad identificada..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado del caso</label>
+            <select id="amBEstadoCaso" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="proceso">En proceso</option>
+              <option value="resuelto">Resuelto</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="app.guardarEncuesta('adultos', 'B')">💾 Guardar Encuesta</button>
+          <button class="btn btn-secondary" onclick="app.adultosAnterior(2)">⬅️ Anterior</button>
         </div>
       </div>
     </div>
+  </div>
 
+
+  <!-- NNA NO ESCOLARIZADOS -->
+  <div id="screenNNA" class="screen hidden">
+    <div class="app-header">
+      <h1>👦 NNA No Escolarizados</h1>
+      <div class="subtitle" id="nnaSubtitle">Datos del NNA</div>
+    </div>
+    <div style="padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span id="gpsNNA" class="gps-indicator obtaining">📡 Obteniendo GPS...</span>
+        <span id="nnaPaso" style="font-size:0.8rem;color:#616161;">Paso 1 de 4</span>
+      </div>
+      <div class="progress-bar"><div id="progressNNA" class="progress-fill" style="width:25%"></div></div>
+      <div id="progressTextNNA" class="progress-text">Paso 1 de 4: Datos del NNA</div>
+
+      <!-- PASO 1: DATOS DEL NNA -->
+      <div id="pasoNNA1">
+        <div class="card">
+          <div class="card-title">🔍 Busqueda por Cedula del NNA</div>
+          <div class="form-group">
+            <label class="form-label">Cedula de identidad (Si aplica)</label>
+            <input type="text" id="nnaCedula" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 12345678" oninput="app.buscarVecino('nna')">
+            <div class="form-hint">Opcional. Escriba para buscar en base de vecinos.</div>
+          </div>
+          <div id="nnaBusquedaResultado"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">👦 Datos del NNA</div>
+          <div class="form-group">
+            <label class="form-label">Nombre y Apellido <span class="required">*</span></label>
+            <input type="text" id="nnaNombre" class="form-input" placeholder="Ej: Juan Perez">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Edad <span class="required">*</span></label>
+            <input type="number" id="nnaEdad" class="form-input" min="0" max="18" placeholder="Ej: 12">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ultimo grado cursado <span class="required">*</span></label>
+            <select id="nnaGrado" class="form-select">
+              <option value="">-- Seleccione --</option>
+              <option value="preescolar">Preescolar</option>
+              <option value="1er_grado">1er Grado</option>
+              <option value="2do_grado">2do Grado</option>
+              <option value="3er_grado">3er Grado</option>
+              <option value="4to_grado">4to Grado</option>
+              <option value="5to_grado">5to Grado</option>
+              <option value="6to_grado">6to Grado</option>
+              <option value="1er_año">1er Año (Media)</option>
+              <option value="2do_año">2do Año (Media)</option>
+              <option value="3er_año">3er Año (Media)</option>
+              <option value="4to_año">4to Año (Media)</option>
+              <option value="5to_año">5to Año (Media)</option>
+              <option value="6to_año">6to Año (Media)</option>
+              <option value="no_cursado">No ha cursado</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="app.nnaSiguiente(2)">Siguiente ➡️</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="app.volverMenu()">Volver al Menu</button>
+      </div>
+
+      <!-- PASO 2: DATOS DEL REPRESENTANTE -->
+      <div id="pasoNNA2" class="hidden">
+        <div class="card">
+          <div class="card-title">🔍 Busqueda por Cedula del Representante</div>
+          <div class="form-group">
+            <label class="form-label">Cedula de identidad</label>
+            <input type="text" id="repCedula" class="form-input" inputmode="numeric" pattern="[0-9]*" placeholder="Ej: 12345678" oninput="app.buscarVecino('rep')">
+          </div>
+          <div id="repBusquedaResultado"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">👤 Datos del Representante</div>
+          <div class="form-group">
+            <label class="form-label">Nombre y Apellido <span class="required">*</span></label>
+            <input type="text" id="repNombre" class="form-input" placeholder="Ej: Maria Perez">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Telefono</label>
+            <input type="tel" id="repTelefono" class="form-input" placeholder="Ej: 04141234567">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Parentesco <span class="required">*</span></label>
+            <select id="repParentesco" class="form-select">
+              <option value="">-- Seleccione --</option>
+              <option value="madre">Madre</option>
+              <option value="padre">Padre</option>
+              <option value="abuela">Abuela</option>
+              <option value="abuelo">Abuelo</option>
+              <option value="tia">Tia</option>
+              <option value="tio">Tio</option>
+              <option value="hermana">Hermana mayor</option>
+              <option value="hermano">Hermano mayor</option>
+              <option value="tutor">Tutor legal</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="app.nnaSiguiente(3)">Siguiente ➡️</button>
+          <button class="btn btn-secondary" onclick="app.nnaAnterior(1)">⬅️ Anterior</button>
+        </div>
+      </div>
+
+      <!-- PASO 3: CAUSAS DE DESESCOLARIZACION -->
+      <div id="pasoNNA3" class="hidden">
+        <div class="card">
+          <div class="card-title">📄 Falta de Documentos</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaDocCedula">
+              <label>Falta de Cedula</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaDocPartida">
+              <label>Falta de Partida de Nacimiento</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaDocConstancia">
+              <label>Falta de Constancia de Estudios Anteriores</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaDocOtroCheck" onchange="app.toggleOtro('nnaDocOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="nnaDocOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🚶 Problemas de Acceso</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaAccLejania">
+              <label>Lejania del plantel</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaAccTransporte">
+              <label>Falta de transporte</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaAccRiesgos">
+              <label>Riesgos en la ruta (delincuencia, etc.)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaAccOtroCheck" onchange="app.toggleOtro('nnaAccOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="nnaAccOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💼 Motivos Laborales</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaLabAportar">
+              <label>Aportar al hogar</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaLabInformal">
+              <label>Trabajo informal</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaLabRep">
+              <label>Trabajo del representante (falta de cuidado)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaLabHermanos">
+              <label>Cuidado de hermanos</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaLabOtroCheck" onchange="app.toggleOtro('nnaLabOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="nnaLabOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚖️ Falta de Tutelaje/Orientacion Legal</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaTutAusencia">
+              <label>Ausencia de un tutor legal</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaTutDesconocimiento">
+              <label>Desconocimiento de pasos para la inscripcion</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaTutAcompanamiento">
+              <label>Falta de acompanamiento familiar</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaTutOtroCheck" onchange="app.toggleOtro('nnaTutOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="nnaTutOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💰 Problemas Economicos</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoUtiles">
+              <label>Falta de recursos para utiles/uniformes</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoAlimentacion">
+              <label>Falta de recursos para alimentacion</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoDeudas">
+              <label>Deudas familiares</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoInestabilidad">
+              <label>Inestabilidad economica familiar</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoApoyo">
+              <label>Necesidad de apoyo economico para escolarizacion</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="nnaEcoOtroCheck" onchange="app.toggleOtro('nnaEcoOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="nnaEcoOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="app.nnaSiguiente(4)">Siguiente ➡️</button>
+          <button class="btn btn-secondary" onclick="app.nnaAnterior(2)">⬅️ Anterior</button>
+        </div>
+      </div>
+
+      <!-- PASO 4: SEGUIMIENTO -->
+      <div id="pasoNNA4" class="hidden">
+        <div class="card">
+          <div class="card-title">📋 Seguimiento del caso</div>
+          <div class="form-group">
+            <label class="form-label">Fue inscrito en la escuela?</label>
+            <div class="option-group">
+              <button type="button" class="option-btn" data-name="nnaInscrito" data-value="SI" onclick="app.selectOption(this)">SI</button>
+              <button type="button" class="option-btn" data-name="nnaInscrito" data-value="NO" onclick="app.selectOption(this)">NO</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha de inscripcion (si aplica)</label>
+            <input type="date" id="nnaFechaInscripcion" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas de seguimiento</label>
+            <textarea id="nnaNotas" class="form-textarea" placeholder="Notas adicionales..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado del caso</label>
+            <select id="nnaEstadoCaso" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="proceso">En proceso</option>
+              <option value="resuelto">Resuelto</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="app.guardarEncuesta('nna')">💾 Guardar Encuesta</button>
+          <button class="btn btn-secondary" onclick="app.nnaAnterior(3)">⬅️ Anterior</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEGUIMIENTO DE CASOS -->
+  <div id="screenSeguimiento" class="screen hidden">
+    <div class="app-header">
+      <h1>📋 Mis Casos</h1>
+      <div class="subtitle">Seguimiento y edicion</div>
+    </div>
+    <div style="padding:16px;">
+      <div class="filter-group">
+        <button class="filter-btn active" onclick="app.filtrarCasos('todos', this)">Todos</button>
+        <button class="filter-btn" onclick="app.filtrarCasos('adultos', this)">Adultos</button>
+        <button class="filter-btn" onclick="app.filtrarCasos('nna', this)">NNA</button>
+        <button class="filter-btn" onclick="app.filtrarCasos('pendiente', this)">Pendiente</button>
+        <button class="filter-btn" onclick="app.filtrarCasos('proceso', this)">Proceso</button>
+        <button class="filter-btn" onclick="app.filtrarCasos('resuelto', this)">Resuelto</button>
+      </div>
+      <div id="casosLista" style="margin-top:16px;"></div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="app.volverMenu()">Volver al Menu</button>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR CASO -->
+  <div id="modalEditarCaso" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalCasoTitulo">Editar Caso</h2>
+        <button class="btn btn-sm btn-secondary" onclick="app.cerrarModal()">✕</button>
+      </div>
+      <div id="modalCasoContent" style="padding:16px;"></div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="app.guardarCasoEditado()">💾 Guardar Cambios</button>
+        <button class="btn btn-secondary" onclick="app.cerrarModal()">Cancelar</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
-  <script>
-    window.addEventListener('error', function(e) {
-      if (e.message && e.message.includes('runtime.lastError')) {
-        e.preventDefault();
-        return true;
-      }
-    });
-  </script>
 </body>
 </html>
