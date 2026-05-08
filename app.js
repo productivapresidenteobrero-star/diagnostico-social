@@ -5,10 +5,10 @@
 // ============================================
 
 const CONFIG = {
-  VERSION: '2.0.0',
+  VERSION: '2.1.0',
   DB_NAME: 'DiagSocialDB',
   DB_VERSION: 2,
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby15P6rFEjAHDMildl1JtrWSY5NP5zmo7eyt1JhTx-VBbIDLqc3ueeyLSnvQ9gw-rh1/exec',
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwRTT1AkykxkwYnZ3H1YCwxLPScwJ0HLLs5_etasKwg-3wq-P4wFA3BulSCAoCDOJwb/exec',
   TOKEN_SEGURIDAD: 'diag-social-2024-secure',
   GPS_TIMEOUT: 30000,
   BORRADOR_INTERVAL: 30000,
@@ -188,6 +188,36 @@ class DiagSocialApp {
     await this.dbOperation('session', 'readwrite', store => store.put(this.session));
     this.mostrarToast(`Bienvenido, ${encuestador.nombre}`, 'success');
     this.mostrarMenu();
+  }
+
+  abrirModalCrearEncuestador() {
+    const modal = document.getElementById('modalCrearEncuestador');
+    if (modal) modal.classList.add('active');
+  }
+
+  cerrarModalCrearEncuestador() {
+    const modal = document.getElementById('modalCrearEncuestador');
+    if (modal) modal.classList.remove('active');
+    const nombre = document.getElementById('nuevoEncNombre');
+    const pin = document.getElementById('nuevoEncPin');
+    if (nombre) nombre.value = '';
+    if (pin) pin.value = '';
+  }
+
+  async crearEncuestadorLocal() {
+    const nombre = document.getElementById('nuevoEncNombre').value.trim();
+    const pin = document.getElementById('nuevoEncPin').value.trim();
+    if (!nombre) { this.mostrarToast('Ingrese el nombre del encuestador', 'error'); return; }
+    if (!pin || !/^\d{4}$/.test(pin)) { this.mostrarToast('El PIN debe ser de 4 digitos numericos', 'error'); return; }
+    const existe = this.encuestadores.find(e => e.nombre.toLowerCase() === nombre.toLowerCase());
+    if (existe) { this.mostrarToast('Ya existe un encuestador con ese nombre', 'error'); return; }
+    const nuevoId = Math.max(...this.encuestadores.map(e => e.id), 0) + 1;
+    const nuevoEncuestador = { id: nuevoId, nombre: nombre, password: pin, pin: pin, activo: true };
+    this.encuestadores.push(nuevoEncuestador);
+    await this.dbOperation('encuestadores', 'readwrite', store => store.put(nuevoEncuestador));
+    this.actualizarSelectEncuestadores();
+    this.cerrarModalCrearEncuestador();
+    this.mostrarToast(`Encuestador "${nombre}" creado. PIN: ${pin}`, 'success');
   }
 
   async cerrarSesion() {
@@ -500,6 +530,25 @@ class DiagSocialApp {
   toggleOtro(campoId) {
     const checkbox = event.target;
     const campo = document.getElementById(campoId);
+    if (campo) campo.classList.toggle('hidden', !checkbox.checked);
+  }
+
+  // Botones toggle para NNA (mejor UX en móviles)
+  toggleBtn(btn, checkboxId) {
+    const checkbox = document.getElementById(checkboxId);
+    if (!checkbox) return;
+    checkbox.checked = !checkbox.checked;
+    btn.classList.toggle('selected', checkbox.checked);
+    btn.textContent = checkbox.checked ? '✅ ' + btn.textContent.replace('❌ ', '').replace('✅ ', '') : '❌ ' + btn.textContent.replace('❌ ', '').replace('✅ ', '');
+  }
+
+  toggleBtnOtro(btn, checkboxId, campoId) {
+    const checkbox = document.getElementById(checkboxId);
+    const campo = document.getElementById(campoId);
+    if (!checkbox) return;
+    checkbox.checked = !checkbox.checked;
+    btn.classList.toggle('selected', checkbox.checked);
+    btn.textContent = checkbox.checked ? '✅ ' + btn.textContent.replace('❌ ', '').replace('✅ ', '') : '❌ ' + btn.textContent.replace('❌ ', '').replace('✅ ', '');
     if (campo) campo.classList.toggle('hidden', !checkbox.checked);
   }
 

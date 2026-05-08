@@ -41,12 +41,13 @@
         </label>
       </div>
       <button class="btn btn-primary btn-lg" onclick="app.login()">Ingresar</button>
+      <button class="btn btn-outline" style="margin-top:12px;" onclick="app.abrirModalCrearEncuestador()">➕ Nuevo Encuestador</button>
       <div class="status-bar" style="margin-top:16px;border:none;background:transparent;">
         <span id="loginDbStatus">Base vecinos: Sin datos</span>
         <span id="statusText">Sin conexion</span>
         <span id="statusOnline" class="status-indicator offline"></span>
       </div>
-      <p style="text-align:center;font-size:0.75rem;color:#9e9e9e;margin-top:8px;">v2.0.0</p>
+      <p style="text-align:center;font-size:0.75rem;color:#9e9e9e;margin-top:8px;">v2.1.0</p>
     </div>
   </div>
 
@@ -219,6 +220,7 @@
       <div id="pasoAdultos3A" class="hidden">
         <div class="card">
           <div class="card-title">✅ Verificacion Rapida</div>
+
           <div class="form-group">
             <label class="form-label">1. Actualmente usted vive solo/a?</label>
             <div class="option-group">
@@ -226,6 +228,7 @@
               <button type="button" class="option-btn" data-name="amViveSolo" data-value="NO" onclick="app.selectOption(this)">NO</button>
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">2. Es sosten de hogar?</label>
             <div class="option-group">
@@ -233,6 +236,7 @@
               <button type="button" class="option-btn" data-name="amSosten" data-value="NO" onclick="app.selectOption(this)">NO</button>
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">3. Los ingresos familiares actuales le permiten cubrir sus necesidades basicas?</label>
             <div class="option-group">
@@ -240,14 +244,59 @@
               <button type="button" class="option-btn" data-name="amIngresos" data-value="NO" onclick="app.selectOption(this)">NO</button>
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">4. Tiene alguna condicion de salud que genere alta dependencia fisica?</label>
-            <div class="option-group">
-              <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="SI" onclick="app.selectOption(this)">SI</button>
-              <button type="button" class="option-btn" data-name="amSaludDependencia" data-value="NO" onclick="app.selectOption(this)">NO</button>
+        </div>
+
+        <!-- CONDICIONES DE SALUD EN SECCION A -->
+        <div class="card">
+          <div class="card-title">🏥 4. Condiciones de Salud</div>
+          <div class="form-hint" style="margin-bottom:12px;color:#616161;">Tiene alguna condicion de salud, limitacion o discapacidad que genere alta dependencia fisica? (Puede marcar mas de una)</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Encamado">
+              <label>Encamado/a</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Parkinson">
+              <label>Parkinson</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Alzheimer">
+              <label>Alzheimer</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Trastorno">
+              <label>Trastorno Neurocognitivo Mayor (demencia)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_InsufRenal">
+              <label>Insuficiencia Renal (dialisis)</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Cancer">
+              <label>Cancer</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_InsufCardiaca">
+              <label>Insuficiencia Cardiaca</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Artritis">
+              <label>Artritis Reumatoidea</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_Esclerosis">
+              <label>Esclerosis Multiple</label>
+            </label>
+            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
+              <input type="checkbox" id="amA_SaludOtroCheck" onchange="app.toggleOtro('amA_SaludOtro')">
+              <label>Otro</label>
+            </label>
+            <div id="amA_SaludOtro" class="hidden" style="margin-top:8px;">
+              <input type="text" class="form-input" placeholder="Especifique...">
             </div>
           </div>
         </div>
+
         <div class="card">
           <div class="card-title">📋 Seguimiento del caso</div>
           <div class="form-group">
@@ -531,129 +580,83 @@
       <div id="pasoNNA3" class="hidden">
         <div class="card">
           <div class="card-title">📄 Falta de Documentos</div>
-          <div class="checkbox-group">
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaDocCedula">
-              <label>Falta de Cedula</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaDocPartida">
-              <label>Falta de Partida de Nacimiento</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaDocConstancia">
-              <label>Falta de Constancia de Estudios Anteriores</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaDocOtroCheck" onchange="app.toggleOtro('nnaDocOtro')">
-              <label>Otro</label>
-            </label>
-            <div id="nnaDocOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" id="btn_nnaDocCedula" onclick="app.toggleBtn(this, 'nnaDocCedula')">❌ Falta de Cedula</button>
+            <button type="button" class="toggle-btn" id="btn_nnaDocPartida" onclick="app.toggleBtn(this, 'nnaDocPartida')">❌ Falta de Partida de Nacimiento</button>
+            <button type="button" class="toggle-btn" id="btn_nnaDocConstancia" onclick="app.toggleBtn(this, 'nnaDocConstancia')">❌ Falta de Constancia de Estudios</button>
+            <button type="button" class="toggle-btn" id="btn_nnaDocOtroCheck" onclick="app.toggleBtnOtro(this, 'nnaDocOtroCheck', 'nnaDocOtro')">❌ Otro</button>
           </div>
+          <div id="nnaDocOtro" class="hidden" style="margin-top:8px;"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <input type="checkbox" id="nnaDocCedula" class="hidden">
+          <input type="checkbox" id="nnaDocPartida" class="hidden">
+          <input type="checkbox" id="nnaDocConstancia" class="hidden">
+          <input type="checkbox" id="nnaDocOtroCheck" class="hidden">
         </div>
 
         <div class="card">
           <div class="card-title">🚶 Problemas de Acceso</div>
-          <div class="checkbox-group">
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaAccLejania">
-              <label>Lejania del plantel</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaAccTransporte">
-              <label>Falta de transporte</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaAccRiesgos">
-              <label>Riesgos en la ruta (delincuencia, etc.)</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaAccOtroCheck" onchange="app.toggleOtro('nnaAccOtro')">
-              <label>Otro</label>
-            </label>
-            <div id="nnaAccOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" id="btn_nnaAccLejania" onclick="app.toggleBtn(this, 'nnaAccLejania')">❌ Lejania del plantel</button>
+            <button type="button" class="toggle-btn" id="btn_nnaAccTransporte" onclick="app.toggleBtn(this, 'nnaAccTransporte')">❌ Falta de transporte</button>
+            <button type="button" class="toggle-btn" id="btn_nnaAccRiesgos" onclick="app.toggleBtn(this, 'nnaAccRiesgos')">❌ Riesgos en la ruta</button>
+            <button type="button" class="toggle-btn" id="btn_nnaAccOtroCheck" onclick="app.toggleBtnOtro(this, 'nnaAccOtroCheck', 'nnaAccOtro')">❌ Otro</button>
           </div>
+          <div id="nnaAccOtro" class="hidden" style="margin-top:8px;"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <input type="checkbox" id="nnaAccLejania" class="hidden">
+          <input type="checkbox" id="nnaAccTransporte" class="hidden">
+          <input type="checkbox" id="nnaAccRiesgos" class="hidden">
+          <input type="checkbox" id="nnaAccOtroCheck" class="hidden">
         </div>
 
         <div class="card">
           <div class="card-title">💼 Motivos Laborales</div>
-          <div class="checkbox-group">
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaLabAportar">
-              <label>Aportar al hogar</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaLabInformal">
-              <label>Trabajo informal</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaLabRep">
-              <label>Trabajo del representante (falta de cuidado)</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaLabHermanos">
-              <label>Cuidado de hermanos</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaLabOtroCheck" onchange="app.toggleOtro('nnaLabOtro')">
-              <label>Otro</label>
-            </label>
-            <div id="nnaLabOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" id="btn_nnaLabAportar" onclick="app.toggleBtn(this, 'nnaLabAportar')">❌ Aportar al hogar</button>
+            <button type="button" class="toggle-btn" id="btn_nnaLabInformal" onclick="app.toggleBtn(this, 'nnaLabInformal')">❌ Trabajo informal</button>
+            <button type="button" class="toggle-btn" id="btn_nnaLabRep" onclick="app.toggleBtn(this, 'nnaLabRep')">❌ Trabajo del representante</button>
+            <button type="button" class="toggle-btn" id="btn_nnaLabHermanos" onclick="app.toggleBtn(this, 'nnaLabHermanos')">❌ Cuidado de hermanos</button>
+            <button type="button" class="toggle-btn" id="btn_nnaLabOtroCheck" onclick="app.toggleBtnOtro(this, 'nnaLabOtroCheck', 'nnaLabOtro')">❌ Otro</button>
           </div>
+          <div id="nnaLabOtro" class="hidden" style="margin-top:8px;"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <input type="checkbox" id="nnaLabAportar" class="hidden">
+          <input type="checkbox" id="nnaLabInformal" class="hidden">
+          <input type="checkbox" id="nnaLabRep" class="hidden">
+          <input type="checkbox" id="nnaLabHermanos" class="hidden">
+          <input type="checkbox" id="nnaLabOtroCheck" class="hidden">
         </div>
 
         <div class="card">
           <div class="card-title">⚖️ Falta de Tutelaje/Orientacion Legal</div>
-          <div class="checkbox-group">
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaTutAusencia">
-              <label>Ausencia de un tutor legal</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaTutDesconocimiento">
-              <label>Desconocimiento de pasos para la inscripcion</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaTutAcompanamiento">
-              <label>Falta de acompanamiento familiar</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaTutOtroCheck" onchange="app.toggleOtro('nnaTutOtro')">
-              <label>Otro</label>
-            </label>
-            <div id="nnaTutOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" id="btn_nnaTutAusencia" onclick="app.toggleBtn(this, 'nnaTutAusencia')">❌ Ausencia de tutor legal</button>
+            <button type="button" class="toggle-btn" id="btn_nnaTutDesconocimiento" onclick="app.toggleBtn(this, 'nnaTutDesconocimiento')">❌ Desconocimiento de pasos</button>
+            <button type="button" class="toggle-btn" id="btn_nnaTutAcompanamiento" onclick="app.toggleBtn(this, 'nnaTutAcompanamiento')">❌ Falta de acompanamiento</button>
+            <button type="button" class="toggle-btn" id="btn_nnaTutOtroCheck" onclick="app.toggleBtnOtro(this, 'nnaTutOtroCheck', 'nnaTutOtro')">❌ Otro</button>
           </div>
+          <div id="nnaTutOtro" class="hidden" style="margin-top:8px;"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <input type="checkbox" id="nnaTutAusencia" class="hidden">
+          <input type="checkbox" id="nnaTutDesconocimiento" class="hidden">
+          <input type="checkbox" id="nnaTutAcompanamiento" class="hidden">
+          <input type="checkbox" id="nnaTutOtroCheck" class="hidden">
         </div>
 
         <div class="card">
           <div class="card-title">💰 Problemas Economicos</div>
-          <div class="checkbox-group">
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoUtiles">
-              <label>Falta de recursos para utiles/uniformes</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoAlimentacion">
-              <label>Falta de recursos para alimentacion</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoDeudas">
-              <label>Deudas familiares</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoInestabilidad">
-              <label>Inestabilidad economica familiar</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoApoyo">
-              <label>Necesidad de apoyo economico para escolarizacion</label>
-            </label>
-            <label class="checkbox-item" onclick="app.toggleCheckbox(this)">
-              <input type="checkbox" id="nnaEcoOtroCheck" onchange="app.toggleOtro('nnaEcoOtro')">
-              <label>Otro</label>
-            </label>
-            <div id="nnaEcoOtro" class="hidden"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <div class="toggle-group">
+            <button type="button" class="toggle-btn" id="btn_nnaEcoUtiles" onclick="app.toggleBtn(this, 'nnaEcoUtiles')">❌ Falta utiles/uniformes</button>
+            <button type="button" class="toggle-btn" id="btn_nnaEcoAlimentacion" onclick="app.toggleBtn(this, 'nnaEcoAlimentacion')">❌ Falta alimentacion</button>
+            <button type="button" class="toggle-btn" id="btn_nnaEcoDeudas" onclick="app.toggleBtn(this, 'nnaEcoDeudas')">❌ Deudas familiares</button>
+            <button type="button" class="toggle-btn" id="btn_nnaEcoInestabilidad" onclick="app.toggleBtn(this, 'nnaEcoInestabilidad')">❌ Inestabilidad economica</button>
+            <button type="button" class="toggle-btn" id="btn_nnaEcoApoyo" onclick="app.toggleBtn(this, 'nnaEcoApoyo')">❌ Necesidad apoyo economico</button>
+            <button type="button" class="toggle-btn" id="btn_nnaEcoOtroCheck" onclick="app.toggleBtnOtro(this, 'nnaEcoOtroCheck', 'nnaEcoOtro')">❌ Otro</button>
           </div>
+          <div id="nnaEcoOtro" class="hidden" style="margin-top:8px;"><input type="text" class="form-input" placeholder="Especifique..."></div>
+          <input type="checkbox" id="nnaEcoUtiles" class="hidden">
+          <input type="checkbox" id="nnaEcoAlimentacion" class="hidden">
+          <input type="checkbox" id="nnaEcoDeudas" class="hidden">
+          <input type="checkbox" id="nnaEcoInestabilidad" class="hidden">
+          <input type="checkbox" id="nnaEcoApoyo" class="hidden">
+          <input type="checkbox" id="nnaEcoOtroCheck" class="hidden">
         </div>
 
         <div class="btn-group">
@@ -715,6 +718,31 @@
       </div>
       <div id="casosLista" style="margin-top:16px;"></div>
       <button class="btn btn-secondary" style="margin-top:16px;" onclick="app.volverMenu()">Volver al Menu</button>
+    </div>
+  </div>
+
+  <!-- MODAL CREAR ENCUESTADOR -->
+  <div id="modalCrearEncuestador" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>➕ Crear Nuevo Encuestador</h2>
+        <button class="btn btn-sm btn-secondary" onclick="app.cerrarModalCrearEncuestador()">✕</button>
+      </div>
+      <div style="padding:16px;">
+        <div class="form-group">
+          <label class="form-label">Nombre completo <span class="required">*</span></label>
+          <input type="text" id="nuevoEncNombre" class="form-input" placeholder="Ej: Carlos Rodriguez">
+        </div>
+        <div class="form-group">
+          <label class="form-label">PIN de 4 digitos <span class="required">*</span></label>
+          <input type="password" id="nuevoEncPin" class="form-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="****">
+          <div class="form-hint">Este PIN se usara para iniciar sesion</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="app.crearEncuestadorLocal()">💾 Crear Encuestador</button>
+        <button class="btn btn-secondary" onclick="app.cerrarModalCrearEncuestador()">Cancelar</button>
+      </div>
     </div>
   </div>
 
